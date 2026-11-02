@@ -1,14 +1,17 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Read from env or local storage config
-const getEnvOrStorage = (key: string, storageKey: string): string => {
+const DEFAULT_URL = 'https://oaqzbymmhusbhvscfcrp.supabase.co';
+const DEFAULT_KEY = 'sb_publishable_Y8hY9if-e5PdwcmCKALzsQ_bzUpYVHp';
+
+// Read from env or local storage config with pre-configured defaults
+const getEnvOrStorage = (key: string, storageKey: string, defaultValue: string): string => {
   const envVal = (import.meta.env as unknown as Record<string, string | undefined>)[key];
-  return envVal || localStorage.getItem(storageKey) || '';
+  return envVal || localStorage.getItem(storageKey) || defaultValue;
 };
 
 export const getSupabaseConfig = () => {
-  const url = getEnvOrStorage('VITE_SUPABASE_URL', 'archival_supabase_url');
-  const anonKey = getEnvOrStorage('VITE_SUPABASE_ANON_KEY', 'archival_supabase_anon_key');
+  const url = getEnvOrStorage('VITE_SUPABASE_URL', 'archival_supabase_url', DEFAULT_URL);
+  const anonKey = getEnvOrStorage('VITE_SUPABASE_ANON_KEY', 'archival_supabase_anon_key', DEFAULT_KEY);
   return { url, anonKey, isConfigured: Boolean(url && anonKey) };
 };
 
@@ -39,19 +42,23 @@ export const uploadClothingImage = async (file: File): Promise<string | null> =>
     const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${ext}`;
     const filePath = `items/${filename}`;
 
-    const { error: uploadError } = await client.storage
-      .from('closet-images')
-      .upload(filePath, file, { contentType: file.type || 'image/png' });
+    // Try 'closet-images' first, then 'item-photos'
+    const bucketsToTry = ['closet-images', 'item-photos'];
 
-    if (uploadError) {
-      console.warn('Supabase image upload error, using local fallback:', uploadError.message);
-      return null;
+    for (const bucketName of bucketsToTry) {
+      const { error: uploadError } = await client.storage
+        .from(bucketName)
+        .upload(filePath, file, { contentType: file.type || 'image/png', upsert: true });
+
+      if (!uploadError) {
+        const { data } = client.storage.from(bucketName).getPublicUrl(filePath);
+        return data.publicUrl;
+      }
     }
 
-    const { data } = client.storage.from('closet-images').getPublicUrl(filePath);
-    return data.publicUrl;
+    return null;
   } catch (err) {
-    console.warn('Supabase storage error:', err);
+    console.warn('Supabase storage upload error, falling back to local storage:', err);
     return null;
   }
 };
