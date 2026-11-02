@@ -156,45 +156,72 @@
   .garment-layers-stack {
     width: 100%;
     max-width: 320px;
-    min-height: 380px;
+    min-height: 420px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    padding: 1rem 0;
+    padding: 1.25rem 0;
+    position: relative;
 
     @media (max-width: 640px) {
-      min-height: 300px;
+      min-height: 340px;
     }
 
     .layer-slot {
+      width: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 
-      img {
-        max-width: 100%;
+      .composite-img {
+        display: block;
+        width: auto;
+        height: 100%;
+        max-width: 85%;
         max-height: 100%;
         object-fit: contain;
-        filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.06));
+        filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.08));
+        pointer-events: none;
+      }
+
+      &.layer-slot-none {
+        opacity: 0.25;
+        border: 1px dashed rgba(colors.$primary-black, 0.15);
+        border-radius: 2px;
+        background: rgba(0, 0, 0, 0.01);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        .slot-empty-label {
+          font-size: 8px;
+          letter-spacing: 0.15em;
+          color: colors.$text-light-gray;
+        }
       }
     }
 
     .layer-outerwear {
-      height: 120px;
-      margin-bottom: -40px;
+      height: 140px;
+      margin-bottom: -45px;
       z-index: 4;
+
+      &.layer-slot-none {
+        height: 40px;
+        margin-bottom: 0.5rem;
+      }
     }
 
     .layer-top {
-      height: 110px;
+      height: 130px;
       z-index: 3;
     }
 
     .layer-bottom {
-      height: 120px;
+      height: 140px;
       margin-top: -20px;
       z-index: 2;
     }
@@ -203,17 +230,21 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 1.5rem;
+      gap: 1.25rem;
       width: 100%;
       margin-top: -10px;
       z-index: 1;
 
       .layer-shoes {
-        height: 70px;
+        height: 80px;
+        flex: 1;
+        max-width: 120px;
       }
 
       .layer-accessory {
-        height: 70px;
+        height: 80px;
+        flex: 1;
+        max-width: 120px;
       }
     }
   }
