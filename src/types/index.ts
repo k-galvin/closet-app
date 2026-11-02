@@ -2,6 +2,7 @@ export type ClothingCategory =
   | 'tops' 
   | 'bottoms' 
   | 'outerwear' 
+  | 'dresses'
   | 'shoes' 
   | 'accessories' 
   | 'one-piece';
@@ -25,12 +26,21 @@ export interface ClothingItem {
   updatedAt: number;
 }
 
+export interface CanvasItemPosition {
+  x: number;      // percent 0-100 or px offset
+  y: number;      // percent 0-100 or px offset
+  scale: number;  // 0.5 - 2.0
+  zIndex: number;
+}
+
 export interface OutfitSlotAssignment {
   topId?: string;
   bottomId?: string;
+  dressId?: string;
   shoesId?: string;
   outerwearId?: string;
   accessoryId?: string;
+  canvasPositions?: Record<string, CanvasItemPosition>;
 }
 
 export interface Outfit {

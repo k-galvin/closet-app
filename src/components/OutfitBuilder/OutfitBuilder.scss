@@ -93,7 +93,8 @@
 .builder-actions-top {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 
   @media (max-width: 800px) {
     width: 100%;
@@ -101,18 +102,18 @@
   }
 
   .icon-btn {
-    padding: 0.65rem 0.85rem;
+    padding: 0.6rem 0.75rem;
   }
 
   .save-btn {
-    padding: 0.65rem 1.25rem;
+    padding: 0.6rem 1.15rem;
   }
 }
 
 // Layout Split
 .builder-layout-split {
   display: grid;
-  grid-template-columns: 1fr 1.35fr;
+  grid-template-columns: 1fr 1.3fr;
   gap: 2.5rem;
   align-items: start;
 
@@ -122,7 +123,7 @@
   }
 }
 
-// Composite Mannequin Stage
+// Composite Exhibition Stage & Canvas
 .composite-stage {
   position: sticky;
   top: 5.5rem;
@@ -136,139 +137,260 @@
     position: relative;
     background: colors.$white;
     border: 1px solid rgba(colors.$primary-black, 0.08);
-    padding: 2rem 1.5rem 1.5rem;
+    padding: 1.25rem;
     display: flex;
     flex-direction: column;
-    align-items: center;
     box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.04);
   }
 
-  .stage-tag {
-    position: absolute;
-    top: 0.75rem;
-    left: 0.75rem;
-    font-size: 7px;
-    letter-spacing: 0.2em;
-    color: colors.$accent-blue;
-    opacity: 0.8;
-  }
-
-  .garment-layers-stack {
-    width: 100%;
-    max-width: 320px;
-    min-height: 420px;
+  .stage-top-meta {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 1.25rem 0;
-    position: relative;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(colors.$primary-black, 0.05);
+    margin-bottom: 0.85rem;
 
-    @media (max-width: 640px) {
-      min-height: 340px;
+    .stage-tag {
+      font-size: 7px;
+      letter-spacing: 0.2em;
+      color: colors.$accent-blue;
+      font-weight: 700;
     }
 
-    .layer-slot {
-      width: 100%;
+    .stage-hint {
+      font-size: 7px;
+      letter-spacing: 0.1em;
+      opacity: 0.4;
+    }
+  }
+
+  // Freeform Interactive Moodboard Canvas
+  .freeform-canvas {
+    width: 100%;
+    height: 480px;
+    background: #fdfdfd;
+    border: 1px solid rgba(colors.$primary-black, 0.05);
+    position: relative;
+    overflow: hidden;
+    touch-action: none; // Crucial for reliable touch drag on iPhone
+    user-select: none;
+    -webkit-user-select: none;
+
+    @media (max-width: 640px) {
+      height: 390px;
+    }
+
+    .canvas-grid-pattern {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.06;
+      background-image: radial-gradient(colors.$accent-blue 0.8px, transparent 0.8px);
+      background-size: 20px 20px;
+    }
+
+    .canvas-vacant-prompt {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      text-align: center;
+      color: colors.$text-light-gray;
+      padding: 1.5rem;
+      pointer-events: none;
+
+      span {
+        font-size: 9px;
+        letter-spacing: 0.2em;
+        font-weight: 700;
+      }
+
+      p {
+        margin: 0;
+        font-size: 11px;
+        max-width: 18rem;
+        line-height: 1.4;
+      }
+    }
+
+    .canvas-garment-node {
+      position: absolute;
+      cursor: grab;
       display: flex;
       align-items: center;
       justify-content: center;
-      position: relative;
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      touch-action: none;
+      transition: filter 0.2s ease;
 
-      .composite-img {
-        display: block;
-        width: auto;
-        height: 100%;
-        max-width: 85%;
-        max-height: 100%;
-        object-fit: contain;
-        filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.08));
-        pointer-events: none;
+      &:active {
+        cursor: grabbing;
       }
 
-      &.layer-slot-none {
-        opacity: 0.25;
-        border: 1px dashed rgba(colors.$primary-black, 0.15);
-        border-radius: 2px;
-        background: rgba(0, 0, 0, 0.01);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      .canvas-garment-img {
+        max-width: 180px;
+        max-height: 200px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.1));
+        pointer-events: none;
 
-        .slot-empty-label {
-          font-size: 8px;
-          letter-spacing: 0.15em;
-          color: colors.$text-light-gray;
+        @media (max-width: 640px) {
+          max-width: 140px;
+          max-height: 160px;
+        }
+      }
+
+      &.is-selected {
+        .canvas-garment-img {
+          filter: drop-shadow(0 12px 24px rgba(0, 71, 171, 0.2));
+        }
+
+        .node-bounding-box {
+          position: absolute;
+          inset: -6px;
+          border: 1px dashed colors.$accent-blue;
+          pointer-events: none;
+
+          .bounding-handle {
+            position: absolute;
+            width: 7px;
+            height: 7px;
+            background: colors.$white;
+            border: 1.5px solid colors.$accent-blue;
+            border-radius: 50%;
+
+            &.top-left {
+              top: -4px;
+              left: -4px;
+            }
+            &.top-right {
+              top: -4px;
+              right: -4px;
+            }
+            &.bottom-left {
+              bottom: -4px;
+              left: -4px;
+            }
+            &.bottom-right {
+              bottom: -4px;
+              right: -4px;
+            }
+          }
+
+          .node-drag-indicator {
+            position: absolute;
+            top: -18px;
+            left: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            background: colors.$accent-blue;
+            color: colors.$white;
+            padding: 1px 5px;
+            font-size: 7px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-weight: 700;
+          }
         }
       }
     }
 
-    .layer-outerwear {
-      height: 140px;
-      margin-bottom: -45px;
-      z-index: 4;
-
-      &.layer-slot-none {
-        height: 40px;
-        margin-bottom: 0.5rem;
-      }
-    }
-
-    .layer-top {
-      height: 130px;
-      z-index: 3;
-    }
-
-    .layer-bottom {
-      height: 140px;
-      margin-top: -20px;
-      z-index: 2;
-    }
-
-    .layer-bottom-row {
+    // Floating toolbar at the bottom of the canvas
+    .canvas-floating-toolbar {
+      position: absolute;
+      bottom: 0.75rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(colors.$white, 0.95);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(colors.$primary-black, 0.1);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+      padding: 0.4rem 0.65rem;
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 1.25rem;
-      width: 100%;
-      margin-top: -10px;
-      z-index: 1;
+      gap: 0.75rem;
+      z-index: 100;
+      animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      max-width: 90%;
 
-      .layer-shoes {
-        height: 80px;
-        flex: 1;
-        max-width: 120px;
+      .toolbar-item-name {
+        font-size: 9px;
+        letter-spacing: 0.05em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 7rem;
+        color: colors.$text-black;
+        font-weight: 600;
       }
 
-      .layer-accessory {
-        height: 80px;
-        flex: 1;
-        max-width: 120px;
+      .toolbar-btn-group {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+
+        .tool-btn {
+          background: colors.$gray;
+          border: 1px solid rgba(colors.$primary-black, 0.08);
+          width: 1.5rem;
+          height: 1.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: colors.$text-black;
+          transition: all 0.15s ease;
+
+          &:hover {
+            border-color: colors.$accent-blue;
+            color: colors.$accent-blue;
+          }
+
+          &.danger:hover {
+            background: colors.$error-red;
+            border-color: colors.$error-red;
+            color: colors.$white;
+          }
+        }
+
+        .scale-indicator {
+          font-size: 8px;
+          min-width: 2.2rem;
+          text-align: center;
+          color: colors.$accent-blue;
+          font-weight: 700;
+        }
       }
     }
   }
 
+  // Manifest at bottom
   .composite-manifest {
     width: 100%;
     border-top: 1px solid rgba(colors.$primary-black, 0.06);
-    margin-top: 1.25rem;
-    padding-top: 0.85rem;
+    margin-top: 0.85rem;
+    padding-top: 0.65rem;
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.25rem;
 
     .manifest-row {
       display: flex;
       gap: 0.5rem;
-      font-size: 9px;
+      font-size: 8px;
       line-height: 1.3;
     }
 
     .manifest-cat {
       color: colors.$accent-blue;
-      opacity: 0.7;
-      min-width: 4rem;
+      opacity: 0.75;
+      min-width: 3.5rem;
       letter-spacing: 0.1em;
     }
 
@@ -278,6 +400,14 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
+    .manifest-empty {
+      font-size: 8px;
+      opacity: 0.35;
+      letter-spacing: 0.1em;
+      text-align: center;
+      padding: 0.25rem 0;
+    }
   }
 }
 
@@ -285,16 +415,16 @@
 .slot-strips-controls {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .slot-carousel-strip {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.45rem;
   background: colors.$gray;
   border: 1px solid rgba(colors.$primary-black, 0.06);
-  padding: 0.85rem 1rem 1rem;
+  padding: 0.75rem 0.85rem 0.85rem;
 
   .strip-header {
     display: flex;
@@ -315,7 +445,7 @@
       .arrow-btn {
         background: colors.$white;
         border: 1px solid rgba(colors.$primary-black, 0.08);
-        padding: 0.2rem 0.35rem;
+        padding: 0.15rem 0.3rem;
         cursor: pointer;
         color: colors.$text-black;
         display: flex;
@@ -332,20 +462,20 @@
 
   .strip-items-scroll {
     display: flex;
-    gap: 0.65rem;
+    gap: 0.5rem;
     overflow-x: auto;
-    padding: 0.25rem 0;
+    padding: 0.2rem 0;
 
     .strip-item-chip {
       flex-shrink: 0;
-      width: 5.5rem;
+      width: 5rem;
       background: colors.$white;
       border: 1px solid rgba(colors.$primary-black, 0.08);
-      padding: 0.5rem;
+      padding: 0.45rem;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.35rem;
+      gap: 0.3rem;
       cursor: pointer;
       transition: all 0.2s ease;
       text-align: center;
@@ -365,7 +495,7 @@
       }
 
       .chip-label {
-        font-size: 8px;
+        font-size: 7px;
         line-height: 1.2;
         max-width: 100%;
         overflow: hidden;
@@ -392,16 +522,16 @@
 
       &.chip-none {
         justify-content: center;
-        font-size: 9px;
+        font-size: 8px;
         letter-spacing: 0.15em;
         color: colors.$text-light-gray;
       }
     }
 
     .strip-empty {
-      font-size: 9px;
+      font-size: 8px;
       color: colors.$text-light-gray;
-      padding: 1rem 0;
+      padding: 0.75rem 0;
     }
   }
 }

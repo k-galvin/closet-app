@@ -1,6 +1,19 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { ClothingItem, Outfit, OutfitSlotAssignment } from '../../types';
-import { Sparkles, Save, RotateCcw, ChevronLeft, ChevronRight, Check, Trash2 } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { ClothingItem, Outfit, OutfitSlotAssignment, CanvasItemPosition } from '../../types';
+import {
+  Sparkles,
+  Save,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  Trash2,
+  ZoomIn,
+  ZoomOut,
+  Layers as LayersIcon,
+  X,
+  Move,
+} from 'lucide-react';
 import confetti from 'canvas-confetti';
 import './OutfitBuilder.scss';
 
@@ -11,6 +24,17 @@ interface OutfitBuilderProps {
   onSaveOutfit: (outfit: Outfit) => void;
   onDeleteOutfit: (id: string) => void;
 }
+
+type SlotType = 'outerwear' | 'top' | 'bottom' | 'dress' | 'shoes' | 'accessory';
+
+const DEFAULT_POSITIONS: Record<SlotType, CanvasItemPosition> = {
+  outerwear: { x: 50, y: 32, scale: 1.0, zIndex: 10 },
+  top: { x: 50, y: 30, scale: 0.95, zIndex: 6 },
+  bottom: { x: 50, y: 60, scale: 1.0, zIndex: 4 },
+  dress: { x: 50, y: 46, scale: 1.05, zIndex: 5 },
+  shoes: { x: 42, y: 84, scale: 0.85, zIndex: 7 },
+  accessory: { x: 74, y: 70, scale: 0.85, zIndex: 8 },
+};
 
 export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
   items,
@@ -23,30 +47,51 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
 
   // Categorized items
   const outerwearItems = useMemo(() => items.filter((i) => i.category === 'outerwear'), [items]);
-  const topItems = useMemo(() => items.filter((i) => i.category === 'tops' || i.category === 'one-piece'), [items]);
+  const topItems = useMemo(() => items.filter((i) => i.category === 'tops'), [items]);
   const bottomItems = useMemo(() => items.filter((i) => i.category === 'bottoms'), [items]);
+  const dressItems = useMemo(() => items.filter((i) => i.category === 'dresses' || i.category === 'one-piece'), [items]);
   const shoeItems = useMemo(() => items.filter((i) => i.category === 'shoes'), [items]);
   const accessoryItems = useMemo(() => items.filter((i) => i.category === 'accessories'), [items]);
 
-  // Current slot selections (use 'none' to explicitly represent no selection)
+  // Current slot selections (all 100% optional; null means none)
   const [selectedOuterwearId, setSelectedOuterwearId] = useState<string | null>(null);
   const [selectedTopId, setSelectedTopId] = useState<string | null>(null);
   const [selectedBottomId, setSelectedBottomId] = useState<string | null>(null);
+  const [selectedDressId, setSelectedDressId] = useState<string | null>(null);
   const [selectedShoeId, setSelectedShoeId] = useState<string | null>(null);
   const [selectedAccessoryId, setSelectedAccessoryId] = useState<string | null>(null);
 
-  // Sync / initialize slots whenever items change or initialSlotItem is provided
+  // Freeform canvas transformation state for active items
+  const [canvasPositions, setCanvasPositions] = useState<Record<string, CanvasItemPosition>>({});
+  const [selectedCanvasSlot, setSelectedCanvasSlot] = useState<SlotType | null>(null);
+
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    isDragging: boolean;
+    slot: SlotType;
+    startX: number;
+    startY: number;
+    initialPosX: number;
+    initialPosY: number;
+  } | null>(null);
+
+  // Sync / initialize slots whenever initialSlotItem is passed
   useEffect(() => {
     if (initialSlotItem) {
       if (initialSlotItem.category === 'outerwear') setSelectedOuterwearId(initialSlotItem.id);
-      if (initialSlotItem.category === 'tops' || initialSlotItem.category === 'one-piece') setSelectedTopId(initialSlotItem.id);
+      if (initialSlotItem.category === 'tops') setSelectedTopId(initialSlotItem.id);
       if (initialSlotItem.category === 'bottoms') setSelectedBottomId(initialSlotItem.id);
+      if (initialSlotItem.category === 'dresses' || initialSlotItem.category === 'one-piece') {
+        setSelectedDressId(initialSlotItem.id);
+        setSelectedTopId(null);
+        setSelectedBottomId(null);
+      }
       if (initialSlotItem.category === 'shoes') setSelectedShoeId(initialSlotItem.id);
       if (initialSlotItem.category === 'accessories') setSelectedAccessoryId(initialSlotItem.id);
     }
   }, [initialSlotItem]);
 
-  // Ensure default selections if items are available and nothing is selected yet
+  // Initial defaults if nothing set yet
   useEffect(() => {
     if (items.length > 0) {
       setSelectedOuterwearId((prev) => (prev === null && outerwearItems.length > 0 ? outerwearItems[0].id : prev));
@@ -63,88 +108,159 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
   const [outfitOccasion, setOutfitOccasion] = useState('Daily Rotation');
   const [outfitNotes, setOutfitNotes] = useState('');
 
-  // Effective IDs with fallback to first item in category if not explicitly set to 'none'
-  const effectiveOuterwearId = selectedOuterwearId === 'none' ? undefined : (selectedOuterwearId || outerwearItems[0]?.id);
-  const effectiveTopId = selectedTopId === 'none' ? undefined : (selectedTopId || topItems[0]?.id);
-  const effectiveBottomId = selectedBottomId === 'none' ? undefined : (selectedBottomId || bottomItems[0]?.id);
-  const effectiveShoeId = selectedShoeId === 'none' ? undefined : (selectedShoeId || shoeItems[0]?.id);
-  const effectiveAccessoryId = selectedAccessoryId === 'none' ? undefined : (selectedAccessoryId || accessoryItems[0]?.id);
-
   // Selected item objects for display
-  const currentOuterwear = items.find((i) => i.id === effectiveOuterwearId);
-  const currentTop = items.find((i) => i.id === effectiveTopId);
-  const currentBottom = items.find((i) => i.id === effectiveBottomId);
-  const currentShoe = items.find((i) => i.id === effectiveShoeId);
-  const currentAccessory = items.find((i) => i.id === effectiveAccessoryId);
+  const currentOuterwear = items.find((i) => i.id === selectedOuterwearId);
+  const currentTop = items.find((i) => i.id === selectedTopId);
+  const currentBottom = items.find((i) => i.id === selectedBottomId);
+  const currentDress = items.find((i) => i.id === selectedDressId);
+  const currentShoe = items.find((i) => i.id === selectedShoeId);
+  const currentAccessory = items.find((i) => i.id === selectedAccessoryId);
 
-  // Randomize / Shuffle Generator
-  const handleRandomize = () => {
-    if (topItems.length) {
-      setSelectedTopId(topItems[Math.floor(Math.random() * topItems.length)].id);
-    }
-    if (bottomItems.length) {
-      setSelectedBottomId(bottomItems[Math.floor(Math.random() * bottomItems.length)].id);
-    }
-    if (shoeItems.length) {
-      setSelectedShoeId(shoeItems[Math.floor(Math.random() * shoeItems.length)].id);
-    }
-    if (outerwearItems.length) {
-      if (Math.random() > 0.35) {
-        setSelectedOuterwearId(outerwearItems[Math.floor(Math.random() * outerwearItems.length)].id);
-      } else {
-        setSelectedOuterwearId('none');
-      }
-    }
-    if (accessoryItems.length) {
-      if (Math.random() > 0.35) {
-        setSelectedAccessoryId(accessoryItems[Math.floor(Math.random() * accessoryItems.length)].id);
-      } else {
-        setSelectedAccessoryId('none');
-      }
+  // Position getter for a slot
+  const getSlotPosition = (slot: SlotType): CanvasItemPosition => {
+    return canvasPositions[slot] || DEFAULT_POSITIONS[slot];
+  };
+
+  const updateSlotPosition = (slot: SlotType, updates: Partial<CanvasItemPosition>) => {
+    setCanvasPositions((prev) => {
+      const current = prev[slot] || DEFAULT_POSITIONS[slot];
+      return {
+        ...prev,
+        [slot]: { ...current, ...updates },
+      };
+    });
+  };
+
+  // Adjust scale (+ / -)
+  const adjustScale = (slot: SlotType, delta: number) => {
+    const pos = getSlotPosition(slot);
+    const newScale = Math.min(2.2, Math.max(0.4, Number((pos.scale + delta).toFixed(2))));
+    updateSlotPosition(slot, { scale: newScale });
+  };
+
+  // Bring to front
+  const bringToFront = (slot: SlotType) => {
+    const allZ = Object.values(canvasPositions).map((p) => p.zIndex);
+    const maxZ = allZ.length ? Math.max(...allZ) : 10;
+    updateSlotPosition(slot, { zIndex: maxZ + 1 });
+  };
+
+  // Drag handling via Pointer Events
+  const handlePointerDown = (slot: SlotType, e: React.PointerEvent) => {
+    e.stopPropagation();
+    setSelectedCanvasSlot(slot);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+
+    const pos = getSlotPosition(slot);
+    dragRef.current = {
+      isDragging: true,
+      slot,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialPosX: pos.x,
+      initialPosY: pos.y,
+    };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragRef.current || !dragRef.current.isDragging || !canvasRef.current) return;
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const deltaXPixels = e.clientX - dragRef.current.startX;
+    const deltaYPixels = e.clientY - dragRef.current.startY;
+
+    const deltaXPercent = (deltaXPixels / rect.width) * 100;
+    const deltaYPercent = (deltaYPixels / rect.height) * 100;
+
+    const newX = Math.round(dragRef.current.initialPosX + deltaXPercent);
+    const newY = Math.round(dragRef.current.initialPosY + deltaYPercent);
+
+    updateSlotPosition(dragRef.current.slot, { x: newX, y: newY });
+  };
+
+  const handlePointerUp = () => {
+    if (dragRef.current) {
+      dragRef.current = null;
     }
   };
 
-  // Clear / Reset
-  const handleReset = () => {
-    setSelectedOuterwearId(outerwearItems[0]?.id || 'none');
-    setSelectedTopId(topItems[0]?.id || null);
-    setSelectedBottomId(bottomItems[0]?.id || null);
-    setSelectedShoeId(shoeItems[0]?.id || null);
-    setSelectedAccessoryId(accessoryItems[0]?.id || 'none');
+  // Serendipity Randomize
+  const handleRandomize = () => {
+    const useDress = dressItems.length > 0 && Math.random() > 0.6;
+
+    if (useDress) {
+      setSelectedDressId(dressItems[Math.floor(Math.random() * dressItems.length)].id);
+      setSelectedTopId(null);
+      setSelectedBottomId(null);
+    } else {
+      setSelectedDressId(null);
+      if (topItems.length) setSelectedTopId(topItems[Math.floor(Math.random() * topItems.length)].id);
+      if (bottomItems.length) setSelectedBottomId(bottomItems[Math.floor(Math.random() * bottomItems.length)].id);
+    }
+
+    if (shoeItems.length) {
+      setSelectedShoeId(shoeItems[Math.floor(Math.random() * shoeItems.length)].id);
+    }
+
+    if (outerwearItems.length && Math.random() > 0.4) {
+      setSelectedOuterwearId(outerwearItems[Math.floor(Math.random() * outerwearItems.length)].id);
+    } else {
+      setSelectedOuterwearId(null);
+    }
+
+    if (accessoryItems.length && Math.random() > 0.3) {
+      setSelectedAccessoryId(accessoryItems[Math.floor(Math.random() * accessoryItems.length)].id);
+    } else {
+      setSelectedAccessoryId(null);
+    }
+  };
+
+  // Reset positions
+  const handleResetPositions = () => {
+    setCanvasPositions({});
+    setSelectedCanvasSlot(null);
+  };
+
+  // Clear all slots
+  const handleClearAll = () => {
+    setSelectedOuterwearId(null);
+    setSelectedTopId(null);
+    setSelectedBottomId(null);
+    setSelectedDressId(null);
+    setSelectedShoeId(null);
+    setSelectedAccessoryId(null);
+    setCanvasPositions({});
+    setSelectedCanvasSlot(null);
   };
 
   // Helper for cycle prev/next
   const cycleItem = (
     list: ClothingItem[],
-    currentId: string | undefined,
+    currentId: string | null,
     setter: (id: string | null) => void,
-    direction: 1 | -1,
-    allowNone: boolean
+    direction: 1 | -1
   ) => {
     if (list.length === 0) return;
     const currentIndex = currentId ? list.findIndex((i) => i.id === currentId) : -1;
     let nextIndex = currentIndex + direction;
 
-    if (allowNone) {
-      if (nextIndex < -1) nextIndex = list.length - 1;
-      if (nextIndex >= list.length) nextIndex = -1;
-      setter(nextIndex === -1 ? 'none' : list[nextIndex].id);
-    } else {
-      if (nextIndex < 0) nextIndex = list.length - 1;
-      if (nextIndex >= list.length) nextIndex = 0;
-      setter(list[nextIndex].id);
-    }
+    if (nextIndex < -1) nextIndex = list.length - 1;
+    if (nextIndex >= list.length) nextIndex = -1;
+
+    setter(nextIndex === -1 ? null : list[nextIndex].id);
   };
 
   const handleConfirmSave = () => {
     if (!outfitTitle.trim()) return;
 
     const slots: OutfitSlotAssignment = {
-      outerwearId: effectiveOuterwearId,
-      topId: effectiveTopId,
-      bottomId: effectiveBottomId,
-      shoesId: effectiveShoeId,
-      accessoryId: effectiveAccessoryId,
+      outerwearId: selectedOuterwearId || undefined,
+      topId: selectedTopId || undefined,
+      bottomId: selectedBottomId || undefined,
+      dressId: selectedDressId || undefined,
+      shoesId: selectedShoeId || undefined,
+      accessoryId: selectedAccessoryId || undefined,
+      canvasPositions,
     };
 
     const newOutfit: Outfit = {
@@ -175,13 +291,31 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
   };
 
   const loadOutfitToBuilder = (outfit: Outfit) => {
-    setSelectedOuterwearId(outfit.slots.outerwearId || 'none');
+    setSelectedOuterwearId(outfit.slots.outerwearId || null);
     setSelectedTopId(outfit.slots.topId || null);
     setSelectedBottomId(outfit.slots.bottomId || null);
+    setSelectedDressId(outfit.slots.dressId || null);
     setSelectedShoeId(outfit.slots.shoesId || null);
-    setSelectedAccessoryId(outfit.slots.accessoryId || 'none');
+    setSelectedAccessoryId(outfit.slots.accessoryId || null);
+    if (outfit.slots.canvasPositions) {
+      setCanvasPositions(outfit.slots.canvasPositions);
+    }
     setActiveSubView('builder');
   };
+
+  // Active items list to render on canvas
+  const canvasItems: { slot: SlotType; item: ClothingItem }[] = [
+    currentOuterwear && { slot: 'outerwear', item: currentOuterwear },
+    currentTop && { slot: 'top', item: currentTop },
+    currentBottom && { slot: 'bottom', item: currentBottom },
+    currentDress && { slot: 'dress', item: currentDress },
+    currentShoe && { slot: 'shoes', item: currentShoe },
+    currentAccessory && { slot: 'accessory', item: currentAccessory },
+  ].filter(Boolean) as { slot: SlotType; item: ClothingItem }[];
+
+  const activeSelectedItem = selectedCanvasSlot
+    ? canvasItems.find((c) => c.slot === selectedCanvasSlot)
+    : null;
 
   return (
     <div className="outfit-builder-container">
@@ -197,7 +331,7 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
                 className={`sub-tab ${activeSubView === 'builder' ? 'active' : ''}`}
                 onClick={() => setActiveSubView('builder')}
               >
-                STUDIO BUILDER
+                STUDIO CANVAS
               </button>
               <button
                 type="button"
@@ -223,15 +357,24 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
             <button
               type="button"
               className="archival-btn-secondary icon-btn font-mono"
-              onClick={handleReset}
-              title="Reset slots"
+              onClick={handleResetPositions}
+              title="Reset positions"
             >
-              <RotateCcw size={13} /> RESET
+              <RotateCcw size={13} /> RE-ALIGN
+            </button>
+            <button
+              type="button"
+              className="archival-btn-secondary icon-btn font-mono"
+              onClick={handleClearAll}
+              title="Clear all items"
+            >
+              <X size={13} /> CLEAR
             </button>
             <button
               type="button"
               className="archival-btn-primary save-btn"
               onClick={() => setShowSaveModal(true)}
+              disabled={canvasItems.length === 0}
             >
               <Save size={13} /> SAVE LOOK
             </button>
@@ -241,155 +384,239 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
 
       {activeSubView === 'builder' ? (
         <div className="builder-layout-split">
-          {/* LEFT: Composite Mannequin Exhibition Plate */}
+          {/* LEFT: Draggable & Resizable Composite Exhibition Stage */}
           <section className="composite-stage">
             <div className="stage-plate">
-              <div className="stage-tag font-mono">EXHIBITION PLATE // LOOK PREVIEW</div>
+              <div className="stage-top-meta">
+                <span className="stage-tag font-mono">
+                  DRAGGABLE COMPOSITE CANVAS // {canvasItems.length} PIECES
+                </span>
+                <span className="stage-hint font-mono">DRAG TO MOVE • TAP TO RESIZE</span>
+              </div>
 
-              <div className="garment-layers-stack">
-                {/* 1. Outerwear Layer */}
-                <div className={`layer-slot layer-outerwear ${!currentOuterwear ? 'layer-slot-none' : ''}`}>
-                  {currentOuterwear ? (
-                    <img
-                      src={currentOuterwear.imageUrl}
-                      alt={currentOuterwear.name}
-                      className="composite-img"
-                    />
-                  ) : (
-                    <span className="slot-empty-label font-mono">NO OUTERWEAR</span>
-                  )}
-                </div>
+              {/* Freeform Canvas Plate */}
+              <div
+                ref={canvasRef}
+                className="freeform-canvas"
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onClick={() => setSelectedCanvasSlot(null)}
+              >
+                {/* Subtle blueprint grid */}
+                <div className="canvas-grid-pattern" />
 
-                {/* 2. Top Layer */}
-                <div className={`layer-slot layer-top ${!currentTop ? 'layer-slot-none' : ''}`}>
-                  {currentTop ? (
-                    <img
-                      src={currentTop.imageUrl}
-                      alt={currentTop.name}
-                      className="composite-img"
-                    />
-                  ) : (
-                    <span className="slot-empty-label font-mono">NO TOP SELECTED</span>
-                  )}
-                </div>
-
-                {/* 3. Bottom Layer */}
-                <div className={`layer-slot layer-bottom ${!currentBottom ? 'layer-slot-none' : ''}`}>
-                  {currentBottom ? (
-                    <img
-                      src={currentBottom.imageUrl}
-                      alt={currentBottom.name}
-                      className="composite-img"
-                    />
-                  ) : (
-                    <span className="slot-empty-label font-mono">NO TROUSERS SELECTED</span>
-                  )}
-                </div>
-
-                {/* 4. Footwear & Accessories Row */}
-                <div className="layer-bottom-row">
-                  <div className={`layer-slot layer-shoes ${!currentShoe ? 'layer-slot-none' : ''}`}>
-                    {currentShoe ? (
-                      <img
-                        src={currentShoe.imageUrl}
-                        alt={currentShoe.name}
-                        className="composite-img"
-                      />
-                    ) : (
-                      <span className="slot-empty-label font-mono">NO SHOES</span>
-                    )}
+                {canvasItems.length === 0 ? (
+                  <div className="canvas-vacant-prompt font-mono">
+                    <span>[ VACANT CANVAS ]</span>
+                    <p>Select any garment from the panels to begin curating</p>
                   </div>
+                ) : (
+                  canvasItems.map(({ slot, item }) => {
+                    const pos = getSlotPosition(slot);
+                    const isSelected = selectedCanvasSlot === slot;
 
-                  <div className={`layer-slot layer-accessory ${!currentAccessory ? 'layer-slot-none' : ''}`}>
-                    {currentAccessory ? (
-                      <img
-                        src={currentAccessory.imageUrl}
-                        alt={currentAccessory.name}
-                        className="composite-img"
-                      />
-                    ) : (
-                      <span className="slot-empty-label font-mono">NO ACC</span>
-                    )}
+                    return (
+                      <div
+                        key={`${slot}-${item.id}`}
+                        className={`canvas-garment-node ${isSelected ? 'is-selected' : ''}`}
+                        style={{
+                          left: `${pos.x}%`,
+                          top: `${pos.y}%`,
+                          transform: `translate(-50%, -50%) scale(${pos.scale})`,
+                          zIndex: pos.zIndex,
+                        }}
+                        onPointerDown={(e) => handlePointerDown(slot, e)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCanvasSlot(slot);
+                        }}
+                      >
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="canvas-garment-img"
+                          draggable={false}
+                        />
+
+                        {isSelected && (
+                          <div className="node-bounding-box">
+                            <div className="bounding-handle top-left" />
+                            <div className="bounding-handle top-right" />
+                            <div className="bounding-handle bottom-left" />
+                            <div className="bounding-handle bottom-right" />
+                            <div className="node-drag-indicator font-mono">
+                              <Move size={10} />
+                              <span>{item.category}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+
+                {/* Floating Scale & Layer Toolbar for Active Selected Garment */}
+                {activeSelectedItem && (
+                  <div className="canvas-floating-toolbar" onClick={(e) => e.stopPropagation()}>
+                    <span className="toolbar-item-name font-mono">
+                      {activeSelectedItem.item.name}
+                    </span>
+
+                    <div className="toolbar-btn-group font-mono">
+                      <button
+                        type="button"
+                        className="tool-btn"
+                        onClick={() => adjustScale(activeSelectedItem.slot, -0.1)}
+                        title="Scale Down"
+                      >
+                        <ZoomOut size={12} />
+                      </button>
+
+                      <span className="scale-indicator">
+                        {Math.round(getSlotPosition(activeSelectedItem.slot).scale * 100)}%
+                      </span>
+
+                      <button
+                        type="button"
+                        className="tool-btn"
+                        onClick={() => adjustScale(activeSelectedItem.slot, 0.1)}
+                        title="Scale Up"
+                      >
+                        <ZoomIn size={12} />
+                      </button>
+
+                      <button
+                        type="button"
+                        className="tool-btn"
+                        onClick={() => bringToFront(activeSelectedItem.slot)}
+                        title="Bring to Front"
+                      >
+                        <LayersIcon size={12} />
+                      </button>
+
+                      <button
+                        type="button"
+                        className="tool-btn danger"
+                        onClick={() => {
+                          if (activeSelectedItem.slot === 'outerwear') setSelectedOuterwearId(null);
+                          if (activeSelectedItem.slot === 'top') setSelectedTopId(null);
+                          if (activeSelectedItem.slot === 'bottom') setSelectedBottomId(null);
+                          if (activeSelectedItem.slot === 'dress') setSelectedDressId(null);
+                          if (activeSelectedItem.slot === 'shoes') setSelectedShoeId(null);
+                          if (activeSelectedItem.slot === 'accessory') setSelectedAccessoryId(null);
+                          setSelectedCanvasSlot(null);
+                        }}
+                        title="Remove from Canvas"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Garment Bill of Materials / Index */}
               <div className="composite-manifest font-mono">
-                <div className="manifest-row">
-                  <span className="manifest-cat">OUTER:</span>
-                  <span className="manifest-item">{currentOuterwear?.name || '—'}</span>
-                </div>
-                <div className="manifest-row">
-                  <span className="manifest-cat">TOP:</span>
-                  <span className="manifest-item">{currentTop?.name || '—'}</span>
-                </div>
-                <div className="manifest-row">
-                  <span className="manifest-cat">BOTTOM:</span>
-                  <span className="manifest-item">{currentBottom?.name || '—'}</span>
-                </div>
-                <div className="manifest-row">
-                  <span className="manifest-cat">SHOES:</span>
-                  <span className="manifest-item">{currentShoe?.name || '—'}</span>
-                </div>
-                <div className="manifest-row">
-                  <span className="manifest-cat">ACC:</span>
-                  <span className="manifest-item">{currentAccessory?.name || '—'}</span>
-                </div>
+                {currentOuterwear && (
+                  <div className="manifest-row">
+                    <span className="manifest-cat">OUTER:</span>
+                    <span className="manifest-item">{currentOuterwear.name}</span>
+                  </div>
+                )}
+                {currentTop && (
+                  <div className="manifest-row">
+                    <span className="manifest-cat">TOP:</span>
+                    <span className="manifest-item">{currentTop.name}</span>
+                  </div>
+                )}
+                {currentBottom && (
+                  <div className="manifest-row">
+                    <span className="manifest-cat">BOTTOM:</span>
+                    <span className="manifest-item">{currentBottom.name}</span>
+                  </div>
+                )}
+                {currentDress && (
+                  <div className="manifest-row">
+                    <span className="manifest-cat">DRESS:</span>
+                    <span className="manifest-item">{currentDress.name}</span>
+                  </div>
+                )}
+                {currentShoe && (
+                  <div className="manifest-row">
+                    <span className="manifest-cat">SHOES:</span>
+                    <span className="manifest-item">{currentShoe.name}</span>
+                  </div>
+                )}
+                {currentAccessory && (
+                  <div className="manifest-row">
+                    <span className="manifest-cat">ACC:</span>
+                    <span className="manifest-item">{currentAccessory.name}</span>
+                  </div>
+                )}
+                {canvasItems.length === 0 && (
+                  <div className="manifest-empty font-mono">NO ACTIVE PIECES IN LOOK</div>
+                )}
               </div>
             </div>
           </section>
 
-          {/* RIGHT: Slot Control Carousels */}
+          {/* RIGHT: Slot Control Carousels (ALL Categories Optional with 'NONE') */}
           <section className="slot-strips-controls">
             {/* 1. Outerwear Carousel */}
             <SlotCarouselStrip
               title="01 // OUTERWEAR"
               items={outerwearItems}
-              selectedId={effectiveOuterwearId}
-              allowNone={true}
-              onSelect={(id) => setSelectedOuterwearId(id || 'none')}
-              onCycle={(dir) => cycleItem(outerwearItems, effectiveOuterwearId, setSelectedOuterwearId, dir, true)}
+              selectedId={selectedOuterwearId}
+              onSelect={setSelectedOuterwearId}
+              onCycle={(dir) => cycleItem(outerwearItems, selectedOuterwearId, setSelectedOuterwearId, dir)}
             />
 
-            {/* 2. Top Carousel */}
+            {/* 2. Dresses Carousel */}
             <SlotCarouselStrip
-              title="02 // SHIRTS & KNITS"
+              title="02 // DRESSES & ONE-PIECE"
+              items={dressItems}
+              selectedId={selectedDressId}
+              onSelect={(id) => {
+                setSelectedDressId(id);
+                // If selecting dress, optionally clear top/bottom if desired, or let user layer!
+              }}
+              onCycle={(dir) => cycleItem(dressItems, selectedDressId, setSelectedDressId, dir)}
+            />
+
+            {/* 3. Top Carousel */}
+            <SlotCarouselStrip
+              title="03 // SHIRTS & KNITS"
               items={topItems}
-              selectedId={effectiveTopId}
-              allowNone={false}
-              onSelect={(id) => setSelectedTopId(id)}
-              onCycle={(dir) => cycleItem(topItems, effectiveTopId, setSelectedTopId, dir, false)}
+              selectedId={selectedTopId}
+              onSelect={setSelectedTopId}
+              onCycle={(dir) => cycleItem(topItems, selectedTopId, setSelectedTopId, dir)}
             />
 
-            {/* 3. Bottom Carousel */}
+            {/* 4. Bottom Carousel */}
             <SlotCarouselStrip
-              title="03 // TROUSERS & SKIRTS"
+              title="04 // TROUSERS & SKIRTS"
               items={bottomItems}
-              selectedId={effectiveBottomId}
-              allowNone={false}
-              onSelect={(id) => setSelectedBottomId(id)}
-              onCycle={(dir) => cycleItem(bottomItems, effectiveBottomId, setSelectedBottomId, dir, false)}
+              selectedId={selectedBottomId}
+              onSelect={setSelectedBottomId}
+              onCycle={(dir) => cycleItem(bottomItems, selectedBottomId, setSelectedBottomId, dir)}
             />
 
-            {/* 4. Footwear Carousel */}
+            {/* 5. Footwear Carousel */}
             <SlotCarouselStrip
-              title="04 // FOOTWEAR"
+              title="05 // FOOTWEAR"
               items={shoeItems}
-              selectedId={effectiveShoeId}
-              allowNone={false}
-              onSelect={(id) => setSelectedShoeId(id)}
-              onCycle={(dir) => cycleItem(shoeItems, effectiveShoeId, setSelectedShoeId, dir, false)}
+              selectedId={selectedShoeId}
+              onSelect={setSelectedShoeId}
+              onCycle={(dir) => cycleItem(shoeItems, selectedShoeId, setSelectedShoeId, dir)}
             />
 
-            {/* 5. Accessories Carousel */}
+            {/* 6. Accessories Carousel */}
             <SlotCarouselStrip
-              title="05 // BAGS & ACCS"
+              title="06 // BAGS & ACCS"
               items={accessoryItems}
-              selectedId={effectiveAccessoryId}
-              allowNone={true}
-              onSelect={(id) => setSelectedAccessoryId(id || 'none')}
-              onCycle={(dir) => cycleItem(accessoryItems, effectiveAccessoryId, setSelectedAccessoryId, dir, true)}
+              selectedId={selectedAccessoryId}
+              onSelect={setSelectedAccessoryId}
+              onCycle={(dir) => cycleItem(accessoryItems, selectedAccessoryId, setSelectedAccessoryId, dir)}
             />
           </section>
         </div>
@@ -402,9 +629,10 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
                 const oOuter = items.find((i) => i.id === outfit.slots.outerwearId);
                 const oTop = items.find((i) => i.id === outfit.slots.topId);
                 const oBottom = items.find((i) => i.id === outfit.slots.bottomId);
+                const oDress = items.find((i) => i.id === outfit.slots.dressId);
                 const oShoe = items.find((i) => i.id === outfit.slots.shoesId);
                 const oAcc = items.find((i) => i.id === outfit.slots.accessoryId);
-                const outfitItems = [oOuter, oTop, oBottom, oShoe, oAcc].filter(Boolean) as ClothingItem[];
+                const outfitItems = [oOuter, oTop, oBottom, oDress, oShoe, oAcc].filter(Boolean) as ClothingItem[];
 
                 return (
                   <article key={outfit.id} className="lookbook-card">
@@ -458,14 +686,14 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
               <span className="archival-overline text-accent">VACANT LOOKBOOK</span>
               <h2 className="empty-title">No outfits assembled yet</h2>
               <p className="empty-desc">
-                Use the Studio Builder to mix and match tops, bottoms, outerwear, and footwear, then click "SAVE LOOK".
+                Use the Studio Canvas to mix and match any combination of tops, dresses, bottoms, outerwear, and footwear, then click "SAVE LOOK".
               </p>
               <button
                 type="button"
                 className="archival-btn-primary"
                 onClick={() => setActiveSubView('builder')}
               >
-                OPEN STUDIO BUILDER
+                OPEN STUDIO CANVAS
               </button>
             </div>
           )}
@@ -548,12 +776,11 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
   );
 };
 
-// Subcomponent: Individual Slot Strip
+// Subcomponent: Individual Slot Strip (ALL have NONE option)
 interface SlotCarouselStripProps {
   title: string;
   items: ClothingItem[];
-  selectedId: string | undefined;
-  allowNone: boolean;
+  selectedId: string | null;
   onSelect: (id: string | null) => void;
   onCycle: (dir: 1 | -1) => void;
 }
@@ -562,7 +789,6 @@ const SlotCarouselStrip: React.FC<SlotCarouselStripProps> = ({
   title,
   items,
   selectedId,
-  allowNone,
   onSelect,
   onCycle,
 }) => {
@@ -591,15 +817,14 @@ const SlotCarouselStrip: React.FC<SlotCarouselStripProps> = ({
       </div>
 
       <div className="strip-items-scroll hide-scrollbar">
-        {allowNone && (
-          <button
-            type="button"
-            className={`strip-item-chip chip-none font-mono ${!selectedId ? 'selected' : ''}`}
-            onClick={() => onSelect(null)}
-          >
-            NONE
-          </button>
-        )}
+        {/* All categories can be set to NONE */}
+        <button
+          type="button"
+          className={`strip-item-chip chip-none font-mono ${selectedId === null ? 'selected' : ''}`}
+          onClick={() => onSelect(null)}
+        >
+          NONE
+        </button>
 
         {items.map((item) => {
           const isSelected = item.id === selectedId;
@@ -619,7 +844,7 @@ const SlotCarouselStrip: React.FC<SlotCarouselStripProps> = ({
         })}
 
         {items.length === 0 && (
-          <div className="strip-empty font-mono">No garments in this category</div>
+          <div className="strip-empty font-mono">No garments registered yet</div>
         )}
       </div>
     </div>

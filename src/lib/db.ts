@@ -50,7 +50,7 @@ export const getDB = () => {
   return dbPromise;
 };
 
-// Seed initial data if database is empty
+// Seed initial data if database is empty or missing initial items
 export const initDB = async (): Promise<void> => {
   const db = await getDB();
   const itemCount = await db.count('items');
@@ -66,6 +66,14 @@ export const initDB = async (): Promise<void> => {
       await tx.objectStore('outfits').put(outfit);
     }
     await tx.done;
+  } else {
+    // Ensure any new default items (like dresses) are inserted if missing
+    for (const item of INITIAL_ITEMS) {
+      const existing = await db.get('items', item.id);
+      if (!existing) {
+        await db.put('items', item);
+      }
+    }
   }
 };
 

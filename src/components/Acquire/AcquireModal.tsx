@@ -14,10 +14,10 @@ interface AcquireModalProps {
 const CATEGORIES: { label: string; value: ClothingCategory }[] = [
   { label: 'Tops', value: 'tops' },
   { label: 'Bottoms', value: 'bottoms' },
+  { label: 'Dresses', value: 'dresses' },
   { label: 'Outerwear', value: 'outerwear' },
   { label: 'Shoes', value: 'shoes' },
   { label: 'Accessories', value: 'accessories' },
-  { label: 'One-Piece', value: 'one-piece' },
 ];
 
 const SEASONS: Season[] = ['spring', 'summer', 'fall', 'winter'];

@@ -171,6 +171,27 @@ const toteSvg = makeSvgDataUri(`
 </svg>
 `);
 
+const dressSvg = makeSvgDataUri(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 520" width="100%" height="100%">
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <!-- Minimalist Silk Column Dress in Muted Olive -->
+    <!-- Straps -->
+    <line x1="168" y1="50" x2="168" y2="105" stroke="#484e44" stroke-width="4"/>
+    <line x1="232" y1="50" x2="232" y2="105" stroke="#484e44" stroke-width="4"/>
+    <!-- Bodice & Fluid Column Body -->
+    <path d="M155,105 C180,115 220,115 245,105 L255,160 C258,220 270,360 275,470 L125,470 C130,360 142,220 145,160 Z" fill="#52594e"/>
+    <!-- Soft draped cowl highlight -->
+    <path d="M162,110 Q200,135 238,110" fill="none" stroke="#687063" stroke-width="2"/>
+    <path d="M170,135 Q200,155 230,135" fill="none" stroke="#42473f" stroke-width="1.5"/>
+  </g>
+</svg>
+`);
+
 export const INITIAL_ITEMS: ClothingItem[] = [
   {
     id: 'item-1',
@@ -297,6 +318,22 @@ export const INITIAL_ITEMS: ClothingItem[] = [
     catalogNumber: 'ARC-CLO-008',
     createdAt: Date.now() - 86400000 * 2,
     updatedAt: Date.now() - 86400000 * 2,
+  },
+  {
+    id: 'item-9',
+    name: 'Bias-Cut Silk Slip Maxi Dress',
+    category: 'dresses',
+    subcategory: 'Slip Dress',
+    designer: 'Lemaire',
+    color: 'Muted Olive',
+    secondaryColors: ['Sage', 'Earth'],
+    seasons: ['spring', 'summer', 'fall'],
+    imageUrl: dressSvg,
+    notes: 'Heavyweight washed silk habotai cut on the bias with delicate straps. Clean floor-grazing hem.',
+    fabric: '100% Washed Mulberry Silk',
+    catalogNumber: 'ARC-CLO-009',
+    createdAt: Date.now() - 86400000 * 1,
+    updatedAt: Date.now() - 86400000 * 1,
   }
 ];
 
