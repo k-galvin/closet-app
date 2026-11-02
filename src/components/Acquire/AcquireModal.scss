@@ -1,0 +1,212 @@
+@use "../../styles/colors";
+
+.acquire-modal-content {
+  max-width: 52rem;
+  padding: 2.5rem;
+
+  @media (max-width: 768px) {
+    padding: 1.5rem 1.25rem 2rem;
+  }
+}
+
+.acquire-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 2.25rem;
+  margin-top: 1rem;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+.upload-plate-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+
+  .image-upload-box {
+    aspect-ratio: 1;
+    background: colors.$white;
+    border: 1px dashed rgba(colors.$primary-black, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    overflow: hidden;
+    position: relative;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: colors.$accent-blue;
+      background: rgba(0, 71, 171, 0.02);
+    }
+
+    &.has-image {
+      border-style: solid;
+      border-color: rgba(colors.$primary-black, 0.08);
+    }
+  }
+
+  .empty-upload-prompt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 1.5rem;
+    text-align: center;
+
+    .upload-icon {
+      color: colors.$accent-blue;
+      opacity: 0.8;
+    }
+
+    .prompt-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: colors.$text-black;
+    }
+
+    .prompt-sub {
+      font-size: 8px;
+      letter-spacing: 0.1em;
+      opacity: 0.45;
+    }
+  }
+
+  .preview-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+
+    .preview-img {
+      max-width: 90%;
+      max-height: 90%;
+      object-fit: contain;
+      filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.08));
+    }
+
+    .change-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(colors.$white, 0.85);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      color: colors.$accent-blue;
+      font-weight: 700;
+    }
+
+    &:hover .change-overlay {
+      opacity: 1;
+    }
+  }
+
+  .catalog-badge-display {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    padding: 0.5rem 0.75rem;
+    background: colors.$gray;
+    border: 1px solid rgba(colors.$primary-black, 0.06);
+
+    .label {
+      opacity: 0.45;
+    }
+
+    .value {
+      font-weight: 700;
+    }
+  }
+}
+
+.metadata-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+
+  .field-label {
+    font-size: 8px;
+    letter-spacing: 0.15em;
+    opacity: 0.45;
+  }
+
+  .field-input, .field-select, .field-textarea {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    background: colors.$white;
+    border: 1px solid rgba(colors.$primary-black, 0.12);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+
+    &:focus {
+      border-color: colors.$accent-blue;
+    }
+  }
+
+  .field-select {
+    cursor: pointer;
+  }
+}
+
+.form-row-dual {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.seasons-pill-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+
+  .season-pill {
+    padding: 0.35rem 0.65rem;
+    background: colors.$white;
+    border: 1px solid rgba(colors.$primary-black, 0.1);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: colors.$text-black;
+    }
+
+    &.active {
+      background: colors.$accent-blue;
+      border-color: colors.$accent-blue;
+      color: colors.$white;
+      font-weight: 600;
+    }
+  }
+}
+
+.acquire-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(colors.$primary-black, 0.06);
+}

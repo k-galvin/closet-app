@@ -1,0 +1,244 @@
+@use "../../styles/colors";
+
+.item-detail-modal {
+  max-width: 48rem;
+  padding: 2.5rem;
+
+  @media (max-width: 768px) {
+    padding: 1.5rem 1.25rem 2rem;
+  }
+}
+
+.item-detail-content {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 2.5rem;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+.detail-specimen-plate {
+  position: relative;
+  aspect-ratio: 1;
+  background: colors.$white;
+  border: 1px solid rgba(colors.$primary-black, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.75rem;
+
+  .specimen-tag {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    font-size: 8px;
+    letter-spacing: 0.2em;
+    padding: 3px 6px;
+    background: colors.$white;
+    border: 1px solid rgba(colors.$primary-black, 0.08);
+    color: colors.$accent-blue;
+    font-weight: 600;
+  }
+
+  .specimen-image {
+    max-width: 90%;
+    max-height: 90%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.08));
+  }
+}
+
+.detail-info-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+
+  .info-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .specimen-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    color: colors.$text-black;
+  }
+
+  .specimen-designer {
+    font-size: 1.15rem;
+    margin: 0.15rem 0 0;
+    color: colors.$accent-blue;
+  }
+}
+
+.specimen-specs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+  padding: 1rem;
+  background: colors.$gray;
+  border: 1px solid rgba(colors.$primary-black, 0.05);
+
+  .spec-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .spec-label {
+    font-size: 7px;
+    letter-spacing: 0.15em;
+    opacity: 0.45;
+  }
+
+  .spec-value {
+    font-size: 11px;
+    font-weight: 600;
+    color: colors.$text-black;
+  }
+}
+
+.specimen-notes-box {
+  border-left: 2px solid colors.$accent-blue;
+  padding-left: 0.85rem;
+
+  .notes-label {
+    font-size: 8px;
+    letter-spacing: 0.15em;
+    opacity: 0.4;
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+
+  .notes-text {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: colors.$text-medium-gray;
+  }
+}
+
+.collections-inclusion-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  .section-label {
+    font-size: 8px;
+    letter-spacing: 0.15em;
+    opacity: 0.45;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .collections-pill-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .collection-toggle-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.65rem;
+    background: transparent;
+    border: 1px solid rgba(colors.$primary-black, 0.1);
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 2px;
+
+    .pill-check {
+      color: colors.$text-light-gray;
+    }
+
+    &:hover {
+      border-color: colors.$accent-blue;
+    }
+
+    &.active {
+      background: rgba(0, 71, 171, 0.06);
+      border-color: colors.$accent-blue;
+      color: colors.$accent-blue;
+      font-weight: 600;
+
+      .pill-check {
+        color: colors.$accent-blue;
+      }
+    }
+  }
+}
+
+.detail-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(colors.$primary-black, 0.06);
+
+  .match-action-btn {
+    flex: 1;
+  }
+}
+
+.edit-form-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
+
+  .edit-input, .edit-textarea {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    background: colors.$white;
+    border: 1px solid rgba(colors.$primary-black, 0.12);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+
+    &:focus {
+      border-color: colors.$accent-blue;
+    }
+  }
+
+  .title-input {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .edit-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+  }
+}
+
+.delete-confirmation-screen {
+  text-align: center;
+  padding: 1.5rem 0.5rem;
+
+  .modal-subtitle {
+    max-width: 30rem;
+    margin: 0.5rem auto 2rem;
+  }
+
+  .modal-actions-dual {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+  }
+}

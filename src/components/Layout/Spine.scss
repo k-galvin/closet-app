@@ -1,0 +1,112 @@
+@use "../../styles/colors";
+
+.archival-spine {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5.5rem;
+  background: colors.$white;
+  border-right: 1px solid rgba(colors.$primary-black, 0.08);
+  z-index: 110;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3rem 0 2rem;
+  user-select: none;
+
+  @media (max-width: 900px) {
+    display: none;
+  }
+}
+
+.spine-texture-primary {
+  position: absolute;
+  right: 0.25rem;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(colors.$primary-black, 0.04);
+}
+
+.spine-texture-secondary {
+  position: absolute;
+  right: 0.75rem;
+  top: 0;
+  bottom: 0;
+  width: 0.5px;
+  background: rgba(colors.$primary-black, 0.02);
+}
+
+.spine-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+
+  .accent-dot {
+    width: 7px;
+    height: 7px;
+    background: colors.$accent-blue;
+    border-radius: 50%;
+  }
+
+  .spine-logo {
+    font-weight: 900;
+    font-size: 1.35rem;
+    color: colors.$accent-blue;
+    letter-spacing: -0.05em;
+    writing-mode: vertical-lr;
+    transform: rotate(180deg);
+    margin: 0;
+    line-height: 1;
+  }
+
+  .spine-sub {
+    writing-mode: vertical-lr;
+    transform: rotate(180deg);
+    font-size: 7px;
+    letter-spacing: 0.35em;
+    margin-top: 0.5rem;
+  }
+}
+
+.spine-center {
+  writing-mode: vertical-lr;
+  transform: rotate(180deg);
+
+  .spine-edition {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 8px;
+    letter-spacing: 0.3em;
+    opacity: 0.25;
+    text-transform: uppercase;
+  }
+}
+
+.spine-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+
+  .spine-current-view {
+    writing-mode: vertical-lr;
+    transform: rotate(180deg);
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: colors.$accent-blue;
+    font-weight: 600;
+  }
+
+  .spine-catalog-code {
+    writing-mode: vertical-lr;
+    transform: rotate(180deg);
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 7px;
+    letter-spacing: 0.15em;
+    opacity: 0.3;
+  }
+}

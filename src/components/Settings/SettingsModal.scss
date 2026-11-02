@@ -1,0 +1,122 @@
+@use "../../styles/colors";
+
+.settings-modal-content {
+  max-width: 42rem;
+  padding: 2.5rem;
+
+  @media (max-width: 768px) {
+    padding: 1.5rem 1.25rem 2rem;
+  }
+}
+
+.settings-sections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+
+.settings-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  border-top: 1px solid rgba(colors.$primary-black, 0.08);
+  padding-top: 1.25rem;
+
+  &:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  .block-title {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    color: colors.$accent-blue;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .block-desc {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: colors.$text-medium-gray;
+  }
+}
+
+.ios-instructions-box {
+  background: colors.$gray;
+  border: 1px solid rgba(colors.$primary-black, 0.06);
+  padding: 1rem 1.25rem;
+
+  p {
+    margin: 0 0 0.5rem;
+    font-size: 12px;
+    color: colors.$text-black;
+  }
+
+  .ios-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 10px;
+    line-height: 1.6;
+    color: colors.$text-dark-gray;
+  }
+}
+
+.supabase-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.35rem;
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+
+    .field-label {
+      font-size: 8px;
+      letter-spacing: 0.15em;
+      opacity: 0.45;
+    }
+
+    .field-input {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      background: colors.$white;
+      border: 1px solid rgba(colors.$primary-black, 0.12);
+      font-size: 12px;
+      outline: none;
+
+      &:focus {
+        border-color: colors.$accent-blue;
+      }
+    }
+  }
+
+  .supabase-actions-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.5rem;
+
+    .connection-status {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+    }
+  }
+}
+
+.data-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,93 @@
+@use "../../styles/colors";
+
+.mobile-tab-bar {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: rgba(colors.$white, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(colors.$primary-black, 0.07);
+  padding: 0.5rem 1rem calc(env(safe-area-inset-bottom, 14px) + 0.35rem);
+  justify-content: space-around;
+  align-items: center;
+
+  @media (max-width: 900px) {
+    display: flex;
+  }
+}
+
+.tab-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  color: rgba(colors.$primary-black, 0.38);
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 4rem;
+
+  .tab-label {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  &.active {
+    color: colors.$accent-blue;
+
+    .tab-label {
+      font-weight: 700;
+    }
+
+    .active-dot {
+      position: absolute;
+      bottom: -4px;
+      width: 4px;
+      height: 4px;
+      background: colors.$accent-blue;
+      border-radius: 50%;
+    }
+  }
+
+  &:active {
+    transform: scale(0.92);
+  }
+}
+
+.acquire-center-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  margin: 0 0.25rem;
+  position: relative;
+  top: -6px;
+
+  .btn-inner {
+    width: 2.75rem;
+    height: 2.75rem;
+    background: colors.$accent-blue;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 16px rgba(0, 71, 171, 0.32);
+    transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease;
+  }
+
+  &:active .btn-inner {
+    transform: scale(0.92);
+    box-shadow: 0 2px 8px rgba(0, 71, 171, 0.25);
+  }
+}

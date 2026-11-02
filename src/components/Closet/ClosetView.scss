@@ -1,0 +1,327 @@
+@use "../../styles/colors";
+
+.closet-view-container {
+  display: flex;
+  flex-direction: column;
+  padding: 2.5rem 3rem 6rem;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+
+  @media (max-width: 900px) {
+    padding: 1.5rem 1.25rem 7rem;
+  }
+}
+
+.closet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 1px solid rgba(colors.$primary-black, 0.08);
+  padding-bottom: 1.5rem;
+  margin-bottom: 1.5rem;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+
+  .header-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 1.25rem;
+  }
+
+  .view-title {
+    font-size: 2.25rem;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -0.03em;
+    color: colors.$text-black;
+    line-height: 1;
+
+    @media (max-width: 640px) {
+      font-size: 1.85rem;
+    }
+  }
+
+  .record-count {
+    font-size: 10px;
+    opacity: 0.45;
+    letter-spacing: 0.12em;
+  }
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+.search-bar-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  @media (max-width: 768px) {
+    flex: 1;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 0.85rem;
+    opacity: 0.3;
+    pointer-events: none;
+    color: colors.$text-black;
+  }
+
+  .gallery-search {
+    background: transparent;
+    border: 1px solid rgba(colors.$primary-black, 0.12);
+    padding: 0.55rem 2rem 0.55rem 2.25rem;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    width: 250px;
+    outline: none;
+    transition: all 0.25s ease;
+
+    @media (max-width: 768px) {
+      width: 100%;
+    }
+
+    &:focus {
+      border-color: colors.$accent-blue;
+      box-shadow: 0 0 0 2px rgba(0, 71, 171, 0.08);
+      width: 280px;
+
+      @media (max-width: 768px) {
+        width: 100%;
+      }
+    }
+
+    &::placeholder {
+      opacity: 0.35;
+      letter-spacing: 0.1em;
+    }
+  }
+
+  .search-clear-btn {
+    position: absolute;
+    right: 0.5rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    opacity: 0.4;
+    padding: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+}
+
+.filter-drawer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 1px solid rgba(colors.$primary-black, 0.12);
+  padding: 0.55rem 0.85rem;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: colors.$accent-blue;
+    color: colors.$accent-blue;
+  }
+
+  &.active {
+    background: colors.$accent-blue;
+    border-color: colors.$accent-blue;
+    color: colors.$white;
+  }
+}
+
+// Filter Drawer
+.filter-drawer-pane {
+  background: colors.$gray;
+  border: 1px solid rgba(colors.$primary-black, 0.06);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  animation: slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  .drawer-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.75rem;
+
+    @media (max-width: 900px) {
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+    }
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    .group-label {
+      font-size: 8px;
+      letter-spacing: 0.2em;
+      opacity: 0.4;
+      font-weight: 700;
+    }
+
+    .options-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .filter-btn {
+      background: colors.$white;
+      border: 1px solid rgba(colors.$primary-black, 0.08);
+      padding: 0.35rem 0.65rem;
+      font-size: 11px;
+      font-family: inherit;
+      color: colors.$text-black;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:hover {
+        border-color: colors.$accent-blue;
+      }
+
+      &.selected {
+        background: colors.$accent-blue;
+        border-color: colors.$accent-blue;
+        color: colors.$white;
+        font-weight: 600;
+      }
+    }
+  }
+
+  .drawer-reset-row {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(colors.$primary-black, 0.06);
+    display: flex;
+    justify-content: flex-end;
+
+    .reset-filters-btn {
+      background: none;
+      border: none;
+      color: colors.$accent-blue;
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      cursor: pointer;
+      padding: 0.25rem;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+}
+
+// Quick categories for mobile iPhone
+.mobile-quick-categories {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 1.25rem;
+  margin-bottom: 0.5rem;
+
+  .quick-cat-chip {
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid rgba(colors.$primary-black, 0.1);
+    padding: 0.4rem 0.85rem;
+    font-size: 11px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(colors.$primary-black, 0.6);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 999px;
+
+    &:hover {
+      border-color: colors.$text-black;
+      color: colors.$text-black;
+    }
+
+    &.active {
+      background: colors.$text-black;
+      border-color: colors.$text-black;
+      color: colors.$white;
+      font-weight: 600;
+    }
+  }
+}
+
+// Garments Grid
+.garments-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2.5rem 1.75rem;
+
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.75rem 1.25rem;
+  }
+
+  @media (max-width: 600px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem 0.85rem;
+  }
+}
+
+.empty-inventory-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6rem 1.5rem;
+  gap: 0.75rem;
+
+  .empty-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0.25rem 0 0;
+  }
+
+  .empty-desc {
+    font-size: 13px;
+    color: colors.$text-medium-gray;
+    max-width: 26rem;
+    margin: 0 0 1.25rem;
+    line-height: 1.5;
+  }
+}
