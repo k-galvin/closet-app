@@ -103,6 +103,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     setIsBatchSyncing(true);
     let successCount = 0;
+    let lastError: string | undefined;
 
     for (let i = 0; i < localItems.length; i++) {
       const item = localItems[i];
@@ -115,12 +116,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           updatedAt: Date.now(),
         });
         successCount++;
+      } else {
+        lastError = result.error;
       }
     }
 
     await onRefreshData();
     setIsBatchSyncing(false);
-    setSyncProgress(`✓ Migrated ${successCount} of ${localItems.length} garments to Supabase Cloud!`);
+    if (successCount === localItems.length) {
+      setSyncProgress(`✓ Successfully migrated all ${successCount} garments to Supabase Cloud!`);
+    } else {
+      setSyncProgress(`Migrated ${successCount} of ${localItems.length} garments.${lastError ? ` Error: ${lastError}` : ''}`);
+    }
   };
 
   const cloudItemsCount = items.filter((item) => isCloudUrl(item.imageUrl)).length;

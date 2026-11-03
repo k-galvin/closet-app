@@ -217,23 +217,46 @@ export const uploadClothingImage = async (
   }
 };
 
+// Convert Data URL to a real File, supporting both Base64 and UTF-8/SVG data URIs
+export const dataUrlToFile = (dataUrl: string, fileNamePrefix: string = 'garment'): File => {
+  const parts = dataUrl.split(',');
+  const header = parts[0];
+  const data = parts.slice(1).join(',');
+
+  const mimeMatch = header.match(/data:([^;,]+)/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+  const isBase64 = header.includes(';base64');
+
+  let u8arr: Uint8Array;
+  if (isBase64) {
+    const bstr = atob(data);
+    let n = bstr.length;
+    u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+  } else {
+    // UTF-8 / URL-encoded (e.g. data:image/svg+xml;utf8,...)
+    const decoded = decodeURIComponent(data);
+    const encoder = new TextEncoder();
+    u8arr = encoder.encode(decoded);
+  }
+
+  let ext = 'png';
+  if (mime.includes('svg')) ext = 'svg';
+  else if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
+  else if (mime.includes('webp')) ext = 'webp';
+
+  return new File([u8arr], `${fileNamePrefix}.${ext}`, { type: mime });
+};
+
 // Convert Data URL to Blob and upload to Supabase
 export const uploadDataUrlToSupabase = async (
   dataUrl: string,
   fileNamePrefix: string = 'garment'
 ): Promise<UploadResult> => {
   try {
-    const arr = dataUrl.split(',');
-    const mimeMatch = arr[0].match(/:(.*?);/);
-    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    const ext = mime.split('/')[1] || 'png';
-    const file = new File([u8arr], `${fileNamePrefix}.${ext}`, { type: mime });
+    const file = dataUrlToFile(dataUrl, fileNamePrefix);
     return uploadClothingImage(file, dataUrl);
   } catch (err) {
     return {
