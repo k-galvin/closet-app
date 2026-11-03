@@ -1,7 +1,7 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { ClothingItem, Collection, Outfit } from '../types';
 import { INITIAL_ITEMS, INITIAL_COLLECTIONS, INITIAL_OUTFITS } from './seedData';
-import { syncClothingItemToSupabase, deleteClothingItemFromSupabase } from './supabase';
+import { syncClothingItemToSupabase, deleteClothingItemFromSupabase, fetchSupabaseItems } from './supabase';
 
 interface ClosetDB extends DBSchema {
   items: {
@@ -81,6 +81,21 @@ export const initDB = async (): Promise<void> => {
 export const getAllItems = async (): Promise<ClothingItem[]> => {
   await initDB();
   const db = await getDB();
+
+  // Sync down any items saved to Supabase from other sessions/devices
+  try {
+    const cloudItems = await fetchSupabaseItems();
+    if (cloudItems.length > 0) {
+      const tx = db.transaction('items', 'readwrite');
+      for (const item of cloudItems) {
+        await tx.objectStore('items').put(item);
+      }
+      await tx.done;
+    }
+  } catch {
+    // Offline mode: proceed with local items
+  }
+
   const items = await db.getAll('items');
   return items.sort((a, b) => b.createdAt - a.createdAt);
 };

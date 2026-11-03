@@ -23,6 +23,7 @@ import {
   SQL_TABLE_SETUP,
   isCloudUrl,
   uploadDataUrlToSupabase,
+  syncClothingItemToSupabase,
 } from '../../lib/supabase';
 import { saveItem } from '../../lib/db';
 import './SettingsModal.scss';
@@ -95,9 +96,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleSyncAllLocalItems = async () => {
-    const localItems = items.filter((item) => !isCloudUrl(item.imageUrl) && item.imageUrl.startsWith('data:'));
-    if (localItems.length === 0) {
-      setSyncProgress('All items are already hosted on Supabase Cloud!');
+    if (items.length === 0) {
+      setSyncProgress('No items in closet to sync.');
       return;
     }
 
@@ -105,30 +105,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     let successCount = 0;
     let lastError: string | undefined;
 
-    for (let i = 0; i < localItems.length; i++) {
-      const item = localItems[i];
-      setSyncProgress(`Uploading garment ${i + 1} of ${localItems.length}: ${item.name}...`);
-      const result = await uploadDataUrlToSupabase(item.imageUrl, item.catalogNumber);
-      if (result.success && result.isCloud) {
-        const updatedItem = {
-          ...item,
-          imageUrl: result.url,
-          updatedAt: Date.now(),
-        };
-        await saveItem(updatedItem);
+    for (let i = 0; i < items.length; i++) {
+      let item = items[i];
+      setSyncProgress(`Syncing garment ${i + 1} of ${items.length}: ${item.name}...`);
+
+      // If image is a local data URI, upload image to Supabase Storage first
+      if (!isCloudUrl(item.imageUrl) && item.imageUrl.startsWith('data:')) {
+        const result = await uploadDataUrlToSupabase(item.imageUrl, item.catalogNumber);
+        if (result.success && result.isCloud) {
+          item = {
+            ...item,
+            imageUrl: result.url,
+            updatedAt: Date.now(),
+          };
+        } else {
+          lastError = result.error;
+        }
+      }
+
+      // Save locally and push row to Supabase closet_items table
+      await saveItem(item);
+      const tableSynced = await syncClothingItemToSupabase(item);
+      if (tableSynced || isCloudUrl(item.imageUrl)) {
         successCount++;
-      } else {
-        lastError = result.error;
       }
     }
 
     await onRefreshData();
     setIsBatchSyncing(false);
-    if (successCount === localItems.length) {
-      setSyncProgress(`✓ Successfully migrated all ${successCount} garments to Supabase Cloud!`);
-    } else {
-      setSyncProgress(`Migrated ${successCount} of ${localItems.length} garments.${lastError ? ` Error: ${lastError}` : ''}`);
-    }
+    setSyncProgress(
+      `✓ Successfully synced ${successCount} of ${items.length} garments to Supabase!${
+        lastError ? ` (${lastError})` : ''
+      }`
+    );
   };
 
   const cloudItemsCount = items.filter((item) => isCloudUrl(item.imageUrl)).length;
@@ -180,22 +189,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
-            {localItemsCount > 0 && (
-              <div className="sync-all-action">
-                <button
-                  type="button"
-                  className="archival-btn-secondary sync-all-btn font-mono"
-                  onClick={handleSyncAllLocalItems}
-                  disabled={isBatchSyncing}
-                >
-                  <UploadCloud size={12} />
-                  {isBatchSyncing ? 'MIGRATING TO SUPABASE...' : `SYNC ${localItemsCount} LOCAL ITEMS TO SUPABASE`}
-                </button>
-                {syncProgress && (
-                  <span className="sync-progress-msg font-mono">{syncProgress}</span>
-                )}
-              </div>
-            )}
+            <div className="sync-all-action">
+              <button
+                type="button"
+                className="archival-btn-secondary sync-all-btn font-mono"
+                onClick={handleSyncAllLocalItems}
+                disabled={isBatchSyncing}
+              >
+                <UploadCloud size={12} />
+                {isBatchSyncing ? 'SYNCING TO SUPABASE...' : 'SYNC ALL ITEMS & PHOTOS TO SUPABASE'}
+              </button>
+              {syncProgress && (
+                <span className="sync-progress-msg font-mono">{syncProgress}</span>
+              )}
+            </div>
           </section>
 
           {/* Supabase Integration & Credentials */}

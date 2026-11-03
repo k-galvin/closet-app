@@ -313,3 +313,32 @@ export const deleteClothingItemFromSupabase = async (id: string): Promise<boolea
     return false;
   }
 };
+
+// Fetch all clothing items from Supabase closet_items table
+export const fetchSupabaseItems = async (): Promise<ClothingItem[]> => {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  try {
+    const { data, error } = await client.from('closet_items').select('*');
+    if (error || !data) return [];
+
+    return data.map((row) => ({
+      id: row.id,
+      catalogNumber: row.catalog_number,
+      name: row.name,
+      category: row.category,
+      subcategory: row.subcategory || undefined,
+      designer: row.designer || undefined,
+      color: row.color,
+      fabric: row.fabric || undefined,
+      seasons: row.seasons || [],
+      notes: row.notes || undefined,
+      imageUrl: row.image_url,
+      createdAt: Number(row.created_at) || Date.now(),
+      updatedAt: Number(row.updated_at) || Date.now(),
+    }));
+  } catch {
+    return [];
+  }
+};
