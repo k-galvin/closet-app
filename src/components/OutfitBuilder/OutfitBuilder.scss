@@ -541,6 +541,14 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 0.5rem;
+
+    .strip-title-group {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
 
     .strip-title {
       font-size: 8px;
@@ -549,9 +557,20 @@
       font-weight: 700;
     }
 
+    .strip-active-count {
+      font-size: 7px;
+      letter-spacing: 0.1em;
+      background: rgba(0, 71, 171, 0.08);
+      color: colors.$accent-blue;
+      padding: 1px 5px;
+      border-radius: 2px;
+      font-weight: 700;
+    }
+
     .strip-nav-arrows {
       display: flex;
       gap: 0.25rem;
+      flex-shrink: 0;
 
       .arrow-btn {
         background: colors.$white;
@@ -583,6 +602,7 @@
     -webkit-overflow-scrolling: touch;
 
     .strip-item-chip {
+      position: relative;
       flex-shrink: 0;
       width: 5rem;
       background: colors.$white;
@@ -595,6 +615,24 @@
       cursor: pointer;
       transition: all 0.2s ease;
       text-align: center;
+
+      .chip-check-badge {
+        position: absolute;
+        top: 3px;
+        right: 3px;
+        width: 13px;
+        height: 13px;
+        background: colors.$accent-blue;
+        color: colors.$white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 7px;
+        font-weight: 800;
+        z-index: 5;
+        box-shadow: 0 1px 4px rgba(0, 71, 171, 0.3);
+      }
 
       .chip-img-wrap {
         width: 100%;

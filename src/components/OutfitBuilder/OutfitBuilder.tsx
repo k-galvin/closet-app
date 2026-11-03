@@ -25,16 +25,32 @@ interface OutfitBuilderProps {
   onDeleteOutfit: (id: string) => void;
 }
 
-type SlotType = 'outerwear' | 'top' | 'bottom' | 'dress' | 'shoes' | 'accessory';
-
-// Sensible, balanced default positions on the 0-100% canvas
-const DEFAULT_POSITIONS: Record<SlotType, CanvasItemPosition> = {
-  outerwear: { x: 50, y: 28, scale: 1.0, zIndex: 10 },
-  top: { x: 50, y: 32, scale: 0.95, zIndex: 6 },
-  bottom: { x: 50, y: 58, scale: 1.0, zIndex: 5 },
-  dress: { x: 50, y: 45, scale: 1.05, zIndex: 7 },
-  shoes: { x: 42, y: 84, scale: 0.85, zIndex: 8 },
-  accessory: { x: 74, y: 70, scale: 0.85, zIndex: 9 },
+// Compute default coordinates based on category and layer index
+const getDefaultPositionForCategory = (category: string, indexInCategory: number = 0): CanvasItemPosition => {
+  const offset = indexInCategory * 4;
+  switch (category) {
+    case 'outerwear':
+      return { x: 50 + offset, y: 26 + offset, scale: 1.0, zIndex: 12 + indexInCategory };
+    case 'tops':
+      return { x: 50 + offset, y: 32 + offset, scale: 0.95, zIndex: 6 + indexInCategory };
+    case 'bottoms':
+      return { x: 50 + offset, y: 58 + offset, scale: 1.0, zIndex: 5 + indexInCategory };
+    case 'dresses':
+    case 'one-piece':
+      return { x: 50 + offset, y: 45 + offset, scale: 1.05, zIndex: 7 + indexInCategory };
+    case 'shoes':
+      return { x: 42 + offset, y: 84 + offset, scale: 0.85, zIndex: 8 + indexInCategory };
+    case 'accessories':
+      if (indexInCategory === 0) {
+        return { x: 74, y: 70, scale: 0.85, zIndex: 9 };
+      } else if (indexInCategory === 1) {
+        return { x: 68, y: 18, scale: 0.75, zIndex: 15 };
+      } else {
+        return { x: 26 + offset, y: 64 + offset, scale: 0.8, zIndex: 9 + indexInCategory };
+      }
+    default:
+      return { x: 50, y: 50, scale: 1.0, zIndex: 10 };
+  }
 };
 
 export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
@@ -54,62 +70,49 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
   const shoeItems = useMemo(() => items.filter((i) => i.category === 'shoes'), [items]);
   const accessoryItems = useMemo(() => items.filter((i) => i.category === 'accessories'), [items]);
 
-  // Slot selections:
-  // undefined = uninitialized (use first item in category as default)
-  // 'none' = explicitly set to NONE by user
-  // string ID = specific item selected
-  const [selectedOuterwearId, setSelectedOuterwearId] = useState<string | 'none' | undefined>(undefined);
-  const [selectedTopId, setSelectedTopId] = useState<string | 'none' | undefined>(undefined);
-  const [selectedBottomId, setSelectedBottomId] = useState<string | 'none' | undefined>(undefined);
-  const [selectedDressId, setSelectedDressId] = useState<string | 'none' | undefined>('none'); // dress none by default
-  const [selectedShoeId, setSelectedShoeId] = useState<string | 'none' | undefined>(undefined);
-  const [selectedAccessoryId, setSelectedAccessoryId] = useState<string | 'none' | undefined>(undefined);
+  // Multi-item selection: array of active item IDs
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 
-  // Freeform canvas transformation state for active items
+  // Freeform canvas transformation state for active items (keyed by item.id)
   const [canvasPositions, setCanvasPositions] = useState<Record<string, CanvasItemPosition>>({});
-  const [selectedCanvasSlot, setSelectedCanvasSlot] = useState<SlotType | null>(null);
+  const [selectedCanvasItemId, setSelectedCanvasItemId] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     isDragging: boolean;
-    slot: SlotType;
+    itemId: string;
     startX: number;
     startY: number;
     initialPosX: number;
     initialPosY: number;
   } | null>(null);
 
-  // If navigated from item detail with a specific piece
+  // Initialize selections
   useEffect(() => {
     if (initialSlotItem) {
-      if (initialSlotItem.category === 'outerwear') setSelectedOuterwearId(initialSlotItem.id);
-      if (initialSlotItem.category === 'tops') setSelectedTopId(initialSlotItem.id);
-      if (initialSlotItem.category === 'bottoms') setSelectedBottomId(initialSlotItem.id);
-      if (initialSlotItem.category === 'dresses' || initialSlotItem.category === 'one-piece') {
-        setSelectedDressId(initialSlotItem.id);
-        setSelectedTopId('none');
-        setSelectedBottomId('none');
-      }
-      if (initialSlotItem.category === 'shoes') setSelectedShoeId(initialSlotItem.id);
-      if (initialSlotItem.category === 'accessories') setSelectedAccessoryId(initialSlotItem.id);
+      const companionIds: string[] = [initialSlotItem.id];
+      if (initialSlotItem.category === 'tops' && bottomItems[0]) companionIds.push(bottomItems[0].id);
+      if (initialSlotItem.category === 'bottoms' && topItems[0]) companionIds.push(topItems[0].id);
+      if (shoeItems[0]) companionIds.push(shoeItems[0].id);
+      if (accessoryItems[0]) companionIds.push(accessoryItems[0].id);
+      setSelectedItemIds(companionIds);
+    } else if (selectedItemIds.length === 0 && items.length > 0) {
+      // Default starting look
+      const defaults: string[] = [];
+      if (topItems[0]) defaults.push(topItems[0].id);
+      if (bottomItems[0]) defaults.push(bottomItems[0].id);
+      if (shoeItems[0]) defaults.push(shoeItems[0].id);
+      if (accessoryItems[0]) defaults.push(accessoryItems[0].id);
+      setSelectedItemIds(defaults);
     }
   }, [initialSlotItem]);
 
-  // Resolve effective active IDs
-  const effectiveOuterwearId = selectedOuterwearId === 'none' ? undefined : (selectedOuterwearId || outerwearItems[0]?.id);
-  const effectiveTopId = selectedTopId === 'none' ? undefined : (selectedTopId || topItems[0]?.id);
-  const effectiveBottomId = selectedBottomId === 'none' ? undefined : (selectedBottomId || bottomItems[0]?.id);
-  const effectiveDressId = selectedDressId === 'none' || selectedDressId === undefined ? undefined : selectedDressId;
-  const effectiveShoeId = selectedShoeId === 'none' ? undefined : (selectedShoeId || shoeItems[0]?.id);
-  const effectiveAccessoryId = selectedAccessoryId === 'none' ? undefined : (selectedAccessoryId || accessoryItems[0]?.id);
-
-  // Selected item objects
-  const currentOuterwear = items.find((i) => i.id === effectiveOuterwearId);
-  const currentTop = items.find((i) => i.id === effectiveTopId);
-  const currentBottom = items.find((i) => i.id === effectiveBottomId);
-  const currentDress = items.find((i) => i.id === effectiveDressId);
-  const currentShoe = items.find((i) => i.id === effectiveShoeId);
-  const currentAccessory = items.find((i) => i.id === effectiveAccessoryId);
+  // Resolved list of active items for canvas
+  const canvasItems: ClothingItem[] = useMemo(() => {
+    return selectedItemIds
+      .map((id) => items.find((i) => i.id === id))
+      .filter(Boolean) as ClothingItem[];
+  }, [selectedItemIds, items]);
 
   // Save Modal state
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -117,45 +120,61 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
   const [outfitOccasion, setOutfitOccasion] = useState('Daily Rotation');
   const [outfitNotes, setOutfitNotes] = useState('');
 
-  // Position getter for a slot
-  const getSlotPosition = (slot: SlotType): CanvasItemPosition => {
-    return canvasPositions[slot] || DEFAULT_POSITIONS[slot];
+  // Position getter for an item
+  const getItemPosition = (item: ClothingItem): CanvasItemPosition => {
+    if (canvasPositions[item.id]) {
+      return canvasPositions[item.id];
+    }
+    const sameCatItems = canvasItems.filter((i) => i.category === item.category);
+    const index = sameCatItems.findIndex((i) => i.id === item.id);
+    return getDefaultPositionForCategory(item.category, Math.max(0, index));
   };
 
-  const updateSlotPosition = (slot: SlotType, updates: Partial<CanvasItemPosition>) => {
+  const updateItemPosition = (itemId: string, updates: Partial<CanvasItemPosition>) => {
     setCanvasPositions((prev) => {
-      const current = prev[slot] || DEFAULT_POSITIONS[slot];
+      const item = items.find((i) => i.id === itemId);
+      const current = prev[itemId] || (item ? getItemPosition(item) : { x: 50, y: 50, scale: 1, zIndex: 10 });
       return {
         ...prev,
-        [slot]: { ...current, ...updates },
+        [itemId]: { ...current, ...updates },
       };
     });
   };
 
   // Adjust scale (+ / -)
-  const adjustScale = (slot: SlotType, delta: number) => {
-    const pos = getSlotPosition(slot);
+  const adjustScale = (itemId: string, delta: number) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    const pos = getItemPosition(item);
     const newScale = Math.min(2.5, Math.max(0.35, Number((pos.scale + delta).toFixed(2))));
-    updateSlotPosition(slot, { scale: newScale });
+    updateItemPosition(itemId, { scale: newScale });
   };
 
   // Bring to front
-  const bringToFront = (slot: SlotType) => {
+  const bringToFront = (itemId: string) => {
     const allZ = Object.values(canvasPositions).map((p) => p.zIndex);
     const maxZ = allZ.length ? Math.max(...allZ) : 10;
-    updateSlotPosition(slot, { zIndex: maxZ + 1 });
+    updateItemPosition(itemId, { zIndex: maxZ + 1 });
+  };
+
+  // Remove specific piece from canvas
+  const handleRemoveItem = (itemId: string) => {
+    setSelectedItemIds((prev) => prev.filter((id) => id !== itemId));
+    if (selectedCanvasItemId === itemId) {
+      setSelectedCanvasItemId(null);
+    }
   };
 
   // Drag handling via Pointer Events
-  const handlePointerDown = (slot: SlotType, e: React.PointerEvent) => {
+  const handlePointerDown = (item: ClothingItem, e: React.PointerEvent) => {
     e.stopPropagation();
-    setSelectedCanvasSlot(slot);
+    setSelectedCanvasItemId(item.id);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 
-    const pos = getSlotPosition(slot);
+    const pos = getItemPosition(item);
     dragRef.current = {
       isDragging: true,
-      slot,
+      itemId: item.id,
       startX: e.clientX,
       startY: e.clientY,
       initialPosX: pos.x,
@@ -176,7 +195,7 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
     const newX = Math.round(dragRef.current.initialPosX + deltaXPercent);
     const newY = Math.round(dragRef.current.initialPosY + deltaYPercent);
 
-    updateSlotPosition(dragRef.current.slot, { x: newX, y: newY });
+    updateItemPosition(dragRef.current.itemId, { x: newX, y: newY });
   };
 
   const handlePointerUp = () => {
@@ -185,82 +204,142 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
     }
   };
 
-  // Serendipity Randomize
+  // Toggle selection of an item (supports layering tops, multiple accessories, etc.)
+  const handleToggleItem = (id: string) => {
+    setSelectedItemIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((itemId) => itemId !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+  };
+
+  // Clear all items belonging to a category
+  const handleClearCategory = (categoryKey: string) => {
+    setSelectedItemIds((prev) =>
+      prev.filter((id) => {
+        const item = items.find((i) => i.id === id);
+        if (!item) return false;
+        if (categoryKey === 'dresses') return item.category !== 'dresses' && item.category !== 'one-piece';
+        return item.category !== categoryKey;
+      })
+    );
+  };
+
+  // Cycle helper
+  const handleCycleCategory = (categoryList: ClothingItem[], direction: 1 | -1) => {
+    if (categoryList.length === 0) return;
+    const categoryIds = categoryList.map((i) => i.id);
+    const currentSelected = selectedItemIds.filter((id) => categoryIds.includes(id));
+
+    if (currentSelected.length === 0) {
+      handleToggleItem(categoryList[0].id);
+      return;
+    }
+
+    const lastId = currentSelected[currentSelected.length - 1];
+    const currentIndex = categoryList.findIndex((i) => i.id === lastId);
+    let nextIndex = currentIndex + direction;
+    if (nextIndex < 0) nextIndex = categoryList.length - 1;
+    if (nextIndex >= categoryList.length) nextIndex = 0;
+
+    // Replace current selected with next in cycle
+    const nextItem = categoryList[nextIndex];
+    setSelectedItemIds((prev) => [...prev.filter((id) => !categoryIds.includes(id)), nextItem.id]);
+  };
+
+  // Serendipity Randomize with smart layering
   const handleRandomize = () => {
-    const useDress = dressItems.length > 0 && Math.random() > 0.5;
+    const randomized: string[] = [];
+
+    // 40% chance of a Dress Look vs 60% Separates
+    const useDress = dressItems.length > 0 && Math.random() > 0.6;
 
     if (useDress) {
-      setSelectedDressId(dressItems[Math.floor(Math.random() * dressItems.length)].id);
-      setSelectedTopId('none');
-      setSelectedBottomId('none');
+      randomized.push(dressItems[Math.floor(Math.random() * dressItems.length)].id);
+      // Optional layer over dress (e.g. cardigan/knitwear)
+      if (topItems.length && Math.random() > 0.5) {
+        randomized.push(topItems[Math.floor(Math.random() * topItems.length)].id);
+      }
     } else {
-      setSelectedDressId('none');
-      if (topItems.length) setSelectedTopId(topItems[Math.floor(Math.random() * topItems.length)].id);
-      if (bottomItems.length) setSelectedBottomId(bottomItems[Math.floor(Math.random() * bottomItems.length)].id);
+      // Separates: 1 Bottom
+      if (bottomItems.length) {
+        randomized.push(bottomItems[Math.floor(Math.random() * bottomItems.length)].id);
+      }
+      // 1 or 2 Tops (e.g. Tank + Cardigan / Shirt)
+      if (topItems.length) {
+        const firstTop = topItems[Math.floor(Math.random() * topItems.length)];
+        randomized.push(firstTop.id);
+
+        if (topItems.length > 1 && Math.random() > 0.5) {
+          const secondTop = topItems.find((t) => t.id !== firstTop.id);
+          if (secondTop) randomized.push(secondTop.id);
+        }
+      }
     }
 
+    // Outerwear (50% chance)
+    if (outerwearItems.length && Math.random() > 0.5) {
+      randomized.push(outerwearItems[Math.floor(Math.random() * outerwearItems.length)].id);
+    }
+
+    // Shoes
     if (shoeItems.length) {
-      setSelectedShoeId(shoeItems[Math.floor(Math.random() * shoeItems.length)].id);
+      randomized.push(shoeItems[Math.floor(Math.random() * shoeItems.length)].id);
     }
 
-    if (outerwearItems.length && Math.random() > 0.35) {
-      setSelectedOuterwearId(outerwearItems[Math.floor(Math.random() * outerwearItems.length)].id);
-    } else {
-      setSelectedOuterwearId('none');
+    // Accessories: 1 or 2 (e.g. Bag + Sunglasses)
+    if (accessoryItems.length) {
+      const firstAcc = accessoryItems[Math.floor(Math.random() * accessoryItems.length)];
+      randomized.push(firstAcc.id);
+
+      if (accessoryItems.length > 1 && Math.random() > 0.4) {
+        const secondAcc = accessoryItems.find((a) => a.id !== firstAcc.id);
+        if (secondAcc) randomized.push(secondAcc.id);
+      }
     }
 
-    if (accessoryItems.length && Math.random() > 0.3) {
-      setSelectedAccessoryId(accessoryItems[Math.floor(Math.random() * accessoryItems.length)].id);
-    } else {
-      setSelectedAccessoryId('none');
-    }
+    setSelectedItemIds(randomized);
+    setCanvasPositions({});
+    setSelectedCanvasItemId(null);
   };
 
   // Reset positions
   const handleResetPositions = () => {
     setCanvasPositions({});
-    setSelectedCanvasSlot(null);
+    setSelectedCanvasItemId(null);
   };
 
-  // Clear all slots
+  // Clear all pieces
   const handleClearAll = () => {
-    setSelectedOuterwearId('none');
-    setSelectedTopId('none');
-    setSelectedBottomId('none');
-    setSelectedDressId('none');
-    setSelectedShoeId('none');
-    setSelectedAccessoryId('none');
+    setSelectedItemIds([]);
     setCanvasPositions({});
-    setSelectedCanvasSlot(null);
-  };
-
-  // Helper for cycle prev/next
-  const cycleItem = (
-    list: ClothingItem[],
-    currentId: string | undefined,
-    setter: (id: string | 'none') => void,
-    direction: 1 | -1
-  ) => {
-    if (list.length === 0) return;
-    const currentIndex = currentId ? list.findIndex((i) => i.id === currentId) : -1;
-    let nextIndex = currentIndex + direction;
-
-    if (nextIndex < -1) nextIndex = list.length - 1;
-    if (nextIndex >= list.length) nextIndex = -1;
-
-    setter(nextIndex === -1 ? 'none' : list[nextIndex].id);
+    setSelectedCanvasItemId(null);
   };
 
   const handleConfirmSave = () => {
     if (!outfitTitle.trim()) return;
 
+    // Single slot fallbacks for backwards compatibility
+    const oOuter = selectedItemIds.find((id) => items.find((i) => i.id === id)?.category === 'outerwear');
+    const oTop = selectedItemIds.find((id) => items.find((i) => i.id === id)?.category === 'tops');
+    const oBottom = selectedItemIds.find((id) => items.find((i) => i.id === id)?.category === 'bottoms');
+    const oDress = selectedItemIds.find((id) => {
+      const c = items.find((i) => i.id === id)?.category;
+      return c === 'dresses' || c === 'one-piece';
+    });
+    const oShoe = selectedItemIds.find((id) => items.find((i) => i.id === id)?.category === 'shoes');
+    const oAcc = selectedItemIds.find((id) => items.find((i) => i.id === id)?.category === 'accessories');
+
     const slots: OutfitSlotAssignment = {
-      outerwearId: effectiveOuterwearId,
-      topId: effectiveTopId,
-      bottomId: effectiveBottomId,
-      dressId: effectiveDressId,
-      shoesId: effectiveShoeId,
-      accessoryId: effectiveAccessoryId,
+      itemIds: selectedItemIds,
+      outerwearId: oOuter,
+      topId: oTop,
+      bottomId: oBottom,
+      dressId: oDress,
+      shoesId: oShoe,
+      accessoryId: oAcc,
       canvasPositions,
     };
 
@@ -292,30 +371,28 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
   };
 
   const loadOutfitToBuilder = (outfit: Outfit) => {
-    setSelectedOuterwearId(outfit.slots.outerwearId || 'none');
-    setSelectedTopId(outfit.slots.topId || 'none');
-    setSelectedBottomId(outfit.slots.bottomId || 'none');
-    setSelectedDressId(outfit.slots.dressId || 'none');
-    setSelectedShoeId(outfit.slots.shoesId || 'none');
-    setSelectedAccessoryId(outfit.slots.accessoryId || 'none');
+    if (outfit.slots.itemIds && outfit.slots.itemIds.length > 0) {
+      setSelectedItemIds(outfit.slots.itemIds);
+    } else {
+      const fallbackIds = [
+        outfit.slots.outerwearId,
+        outfit.slots.topId,
+        outfit.slots.bottomId,
+        outfit.slots.dressId,
+        outfit.slots.shoesId,
+        outfit.slots.accessoryId,
+      ].filter(Boolean) as string[];
+      setSelectedItemIds(fallbackIds);
+    }
+
     if (outfit.slots.canvasPositions) {
       setCanvasPositions(outfit.slots.canvasPositions);
     }
     setActiveSubView('builder');
   };
 
-  // Active items list to render on canvas
-  const canvasItems: { slot: SlotType; item: ClothingItem }[] = [
-    currentOuterwear && { slot: 'outerwear', item: currentOuterwear },
-    currentTop && { slot: 'top', item: currentTop },
-    currentBottom && { slot: 'bottom', item: currentBottom },
-    currentDress && { slot: 'dress', item: currentDress },
-    currentShoe && { slot: 'shoes', item: currentShoe },
-    currentAccessory && { slot: 'accessory', item: currentAccessory },
-  ].filter(Boolean) as { slot: SlotType; item: ClothingItem }[];
-
-  const activeSelectedItem = selectedCanvasSlot
-    ? canvasItems.find((c) => c.slot === selectedCanvasSlot)
+  const activeSelectedItem = selectedCanvasItemId
+    ? items.find((i) => i.id === selectedCanvasItemId)
     : null;
 
   return (
@@ -377,7 +454,7 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
               onClick={() => setShowSaveModal(true)}
               disabled={canvasItems.length === 0}
             >
-              <Save size={13} /> SAVE LOOK
+              <Save size={13} /> SAVE LOOK ({canvasItems.length})
             </button>
           </div>
         )}
@@ -390,9 +467,9 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
             <div className="stage-plate">
               <div className="stage-top-meta">
                 <span className="stage-tag font-mono">
-                  DRAGGABLE COMPOSITE CANVAS // {canvasItems.length} PIECES
+                  DRAGGABLE COMPOSITE CANVAS // {canvasItems.length} ACTIVE PIECES
                 </span>
-                <span className="stage-hint font-mono">DRAG TO MOVE • TAP TO RESIZE</span>
+                <span className="stage-hint font-mono">MULTI-SELECT ACTIVE • TAP TO RESIZE</span>
               </div>
 
               {/* Freeform Canvas Plate */}
@@ -401,7 +478,7 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
                 className="freeform-canvas"
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
-                onClick={() => setSelectedCanvasSlot(null)}
+                onClick={() => setSelectedCanvasItemId(null)}
               >
                 {/* Subtle blueprint grid */}
                 <div className="canvas-grid-pattern" />
@@ -409,16 +486,16 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
                 {canvasItems.length === 0 ? (
                   <div className="canvas-vacant-prompt font-mono">
                     <span>[ VACANT CANVAS ]</span>
-                    <p>Select any garment from the panels to begin curating</p>
+                    <p>Tap garments in the side panels to layer tops, mix bottoms, and style accessories</p>
                   </div>
                 ) : (
-                  canvasItems.map(({ slot, item }) => {
-                    const pos = getSlotPosition(slot);
-                    const isSelected = selectedCanvasSlot === slot;
+                  canvasItems.map((item) => {
+                    const pos = getItemPosition(item);
+                    const isSelected = selectedCanvasItemId === item.id;
 
                     return (
                       <div
-                        key={`${slot}-${item.id}`}
+                        key={item.id}
                         className={`canvas-garment-node ${isSelected ? 'is-selected' : ''}`}
                         style={{
                           left: `${pos.x}%`,
@@ -426,10 +503,10 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
                           transform: `translate(-50%, -50%) scale(${pos.scale})`,
                           zIndex: pos.zIndex,
                         }}
-                        onPointerDown={(e) => handlePointerDown(slot, e)}
+                        onPointerDown={(e) => handlePointerDown(item, e)}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedCanvasSlot(slot);
+                          setSelectedCanvasItemId(item.id);
                         }}
                       >
                         <img
@@ -460,27 +537,27 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
                 {activeSelectedItem && (
                   <div className="canvas-floating-toolbar" onClick={(e) => e.stopPropagation()}>
                     <span className="toolbar-item-name font-mono">
-                      {activeSelectedItem.item.name}
+                      {activeSelectedItem.name}
                     </span>
 
                     <div className="toolbar-btn-group font-mono">
                       <button
                         type="button"
                         className="tool-btn"
-                        onClick={() => adjustScale(activeSelectedItem.slot, -0.1)}
+                        onClick={() => adjustScale(activeSelectedItem.id, -0.1)}
                         title="Scale Down"
                       >
                         <ZoomOut size={12} />
                       </button>
 
-                      <span className="scale-indicator">
-                        {Math.round(getSlotPosition(activeSelectedItem.slot).scale * 100)}%
+                      <span className="scale-indicator font-mono">
+                        {Math.round(getItemPosition(activeSelectedItem).scale * 100)}%
                       </span>
 
                       <button
                         type="button"
                         className="tool-btn"
-                        onClick={() => adjustScale(activeSelectedItem.slot, 0.1)}
+                        onClick={() => adjustScale(activeSelectedItem.id, 0.1)}
                         title="Scale Up"
                       >
                         <ZoomIn size={12} />
@@ -489,7 +566,7 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
                       <button
                         type="button"
                         className="tool-btn"
-                        onClick={() => bringToFront(activeSelectedItem.slot)}
+                        onClick={() => bringToFront(activeSelectedItem.id)}
                         title="Bring to Front"
                       >
                         <LayersIcon size={12} />
@@ -498,62 +575,24 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
                       <button
                         type="button"
                         className="tool-btn danger"
-                        onClick={() => {
-                          if (activeSelectedItem.slot === 'outerwear') setSelectedOuterwearId('none');
-                          if (activeSelectedItem.slot === 'top') setSelectedTopId('none');
-                          if (activeSelectedItem.slot === 'bottom') setSelectedBottomId('none');
-                          if (activeSelectedItem.slot === 'dress') setSelectedDressId('none');
-                          if (activeSelectedItem.slot === 'shoes') setSelectedShoeId('none');
-                          if (activeSelectedItem.slot === 'accessory') setSelectedAccessoryId('none');
-                          setSelectedCanvasSlot(null);
-                        }}
-                        title="Remove from Canvas"
+                        onClick={() => handleRemoveItem(activeSelectedItem.id)}
+                        title="Remove piece from look"
                       >
-                        <X size={12} />
+                        <Trash2 size={12} />
                       </button>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Garment Bill of Materials / Index */}
+              {/* Garment Manifest List */}
               <div className="composite-manifest font-mono">
-                {currentOuterwear && (
-                  <div className="manifest-row">
-                    <span className="manifest-cat">OUTER:</span>
-                    <span className="manifest-item">{currentOuterwear.name}</span>
+                {canvasItems.map((item) => (
+                  <div key={item.id} className="manifest-row">
+                    <span className="manifest-cat">{item.category.toUpperCase().slice(0, 5)}:</span>
+                    <span className="manifest-item">{item.name}</span>
                   </div>
-                )}
-                {currentTop && (
-                  <div className="manifest-row">
-                    <span className="manifest-cat">TOP:</span>
-                    <span className="manifest-item">{currentTop.name}</span>
-                  </div>
-                )}
-                {currentBottom && (
-                  <div className="manifest-row">
-                    <span className="manifest-cat">BOTTOM:</span>
-                    <span className="manifest-item">{currentBottom.name}</span>
-                  </div>
-                )}
-                {currentDress && (
-                  <div className="manifest-row">
-                    <span className="manifest-cat">DRESS:</span>
-                    <span className="manifest-item">{currentDress.name}</span>
-                  </div>
-                )}
-                {currentShoe && (
-                  <div className="manifest-row">
-                    <span className="manifest-cat">SHOES:</span>
-                    <span className="manifest-item">{currentShoe.name}</span>
-                  </div>
-                )}
-                {currentAccessory && (
-                  <div className="manifest-row">
-                    <span className="manifest-cat">ACC:</span>
-                    <span className="manifest-item">{currentAccessory.name}</span>
-                  </div>
-                )}
+                ))}
                 {canvasItems.length === 0 && (
                   <div className="manifest-empty font-mono">NO ACTIVE PIECES IN LOOK</div>
                 )}
@@ -561,79 +600,66 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
             </div>
           </section>
 
-          {/* RIGHT: Slot Control Carousels (ALL Categories Optional with 'NONE') */}
+          {/* RIGHT: Slot Control Carousels with MULTI-SELECT SUPPORT */}
           <section className="slot-strips-controls">
-            {/* 1. Outerwear Carousel */}
+            {/* 1. Tops Carousel (Allows Multi-Select Layering: e.g. Tank + Cardigan) */}
             <SlotCarouselStrip
-              title="01 // OUTERWEAR"
-              items={outerwearItems}
-              selectedId={effectiveOuterwearId}
-              onSelect={(id) => setSelectedOuterwearId(id ? id : 'none')}
-              onCycle={(dir) => cycleItem(outerwearItems, effectiveOuterwearId, setSelectedOuterwearId, dir)}
+              title="01 // SHIRTS, KNITS & LAYERS"
+              items={topItems}
+              selectedIds={selectedItemIds}
+              onToggle={handleToggleItem}
+              onClear={() => handleClearCategory('tops')}
+              onCycle={(dir) => handleCycleCategory(topItems, dir)}
             />
 
             {/* 2. Dresses Carousel */}
             <SlotCarouselStrip
               title="02 // DRESSES & ONE-PIECE"
               items={dressItems}
-              selectedId={effectiveDressId}
-              onSelect={(id) => {
-                if (id) {
-                  setSelectedDressId(id);
-                  // When dress is chosen, clear top and bottom if active, or let user freely decide
-                  setSelectedTopId('none');
-                  setSelectedBottomId('none');
-                } else {
-                  setSelectedDressId('none');
-                }
-              }}
-              onCycle={(dir) => cycleItem(dressItems, effectiveDressId, setSelectedDressId, dir)}
+              selectedIds={selectedItemIds}
+              onToggle={handleToggleItem}
+              onClear={() => handleClearCategory('dresses')}
+              onCycle={(dir) => handleCycleCategory(dressItems, dir)}
             />
 
-            {/* 3. Top Carousel */}
+            {/* 3. Outerwear Carousel */}
             <SlotCarouselStrip
-              title="03 // SHIRTS & KNITS"
-              items={topItems}
-              selectedId={effectiveTopId}
-              onSelect={(id) => {
-                setSelectedTopId(id ? id : 'none');
-                if (id && selectedDressId !== 'none') {
-                  setSelectedDressId('none');
-                }
-              }}
-              onCycle={(dir) => cycleItem(topItems, effectiveTopId, setSelectedTopId, dir)}
+              title="03 // OUTERWEAR & JACKETS"
+              items={outerwearItems}
+              selectedIds={selectedItemIds}
+              onToggle={handleToggleItem}
+              onClear={() => handleClearCategory('outerwear')}
+              onCycle={(dir) => handleCycleCategory(outerwearItems, dir)}
             />
 
-            {/* 4. Bottom Carousel */}
+            {/* 4. Bottoms Carousel */}
             <SlotCarouselStrip
               title="04 // TROUSERS & SKIRTS"
               items={bottomItems}
-              selectedId={effectiveBottomId}
-              onSelect={(id) => {
-                setSelectedBottomId(id ? id : 'none');
-                if (id && selectedDressId !== 'none') {
-                  setSelectedDressId('none');
-                }
-              }}
-              onCycle={(dir) => cycleItem(bottomItems, effectiveBottomId, setSelectedBottomId, dir)}
+              selectedIds={selectedItemIds}
+              onToggle={handleToggleItem}
+              onClear={() => handleClearCategory('bottoms')}
+              onCycle={(dir) => handleCycleCategory(bottomItems, dir)}
             />
 
-            {/* 5. Footwear Carousel */}
+            {/* 5. Accessories Carousel (Allows Multi-Select: e.g. Bag + Sunglasses) */}
             <SlotCarouselStrip
-              title="05 // FOOTWEAR"
-              items={shoeItems}
-              selectedId={effectiveShoeId}
-              onSelect={(id) => setSelectedShoeId(id ? id : 'none')}
-              onCycle={(dir) => cycleItem(shoeItems, effectiveShoeId, setSelectedShoeId, dir)}
-            />
-
-            {/* 6. Accessories Carousel */}
-            <SlotCarouselStrip
-              title="06 // BAGS & ACCS"
+              title="05 // BAGS & ACCESSORIES"
               items={accessoryItems}
-              selectedId={effectiveAccessoryId}
-              onSelect={(id) => setSelectedAccessoryId(id ? id : 'none')}
-              onCycle={(dir) => cycleItem(accessoryItems, effectiveAccessoryId, setSelectedAccessoryId, dir)}
+              selectedIds={selectedItemIds}
+              onToggle={handleToggleItem}
+              onClear={() => handleClearCategory('accessories')}
+              onCycle={(dir) => handleCycleCategory(accessoryItems, dir)}
+            />
+
+            {/* 6. Footwear Carousel */}
+            <SlotCarouselStrip
+              title="06 // FOOTWEAR"
+              items={shoeItems}
+              selectedIds={selectedItemIds}
+              onToggle={handleToggleItem}
+              onClear={() => handleClearCategory('shoes')}
+              onCycle={(dir) => handleCycleCategory(shoeItems, dir)}
             />
           </section>
         </div>
@@ -643,13 +669,19 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
           {outfits.length > 0 ? (
             <div className="lookbook-grid">
               {outfits.map((outfit) => {
-                const oOuter = items.find((i) => i.id === outfit.slots.outerwearId);
-                const oTop = items.find((i) => i.id === outfit.slots.topId);
-                const oBottom = items.find((i) => i.id === outfit.slots.bottomId);
-                const oDress = items.find((i) => i.id === outfit.slots.dressId);
-                const oShoe = items.find((i) => i.id === outfit.slots.shoesId);
-                const oAcc = items.find((i) => i.id === outfit.slots.accessoryId);
-                const outfitItems = [oOuter, oTop, oBottom, oDress, oShoe, oAcc].filter(Boolean) as ClothingItem[];
+                // Support both multi-select itemIds and legacy single slots
+                const outfitItems: ClothingItem[] = outfit.slots.itemIds
+                  ? (outfit.slots.itemIds
+                      .map((id) => items.find((i) => i.id === id))
+                      .filter(Boolean) as ClothingItem[])
+                  : ([
+                      items.find((i) => i.id === outfit.slots.outerwearId),
+                      items.find((i) => i.id === outfit.slots.topId),
+                      items.find((i) => i.id === outfit.slots.bottomId),
+                      items.find((i) => i.id === outfit.slots.dressId),
+                      items.find((i) => i.id === outfit.slots.shoesId),
+                      items.find((i) => i.id === outfit.slots.accessoryId),
+                    ].filter(Boolean) as ClothingItem[]);
 
                 return (
                   <article key={outfit.id} className="lookbook-card">
@@ -703,7 +735,7 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
               <span className="archival-overline text-accent">VACANT LOOKBOOK</span>
               <h2 className="empty-title">No outfits assembled yet</h2>
               <p className="empty-desc">
-                Use the Studio Canvas to mix and match any combination of tops, dresses, bottoms, outerwear, and footwear, then click "SAVE LOOK".
+                Use the Studio Canvas to mix, match, and layer tops, dresses, bottoms, accessories, and footwear, then click "SAVE LOOK".
               </p>
               <button
                 type="button"
@@ -721,10 +753,18 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
       {showSaveModal && (
         <div className="archival-modal-overlay" onClick={() => setShowSaveModal(false)}>
           <div className="archival-modal" onClick={(e) => e.stopPropagation()}>
-            <span className="archival-overline text-accent">REGISTER COMPOSITE</span>
-            <h2 className="modal-title">Catalog this outfit</h2>
+            <button
+              type="button"
+              className="close-modal-btn"
+              onClick={() => setShowSaveModal(false)}
+            >
+              <X size={20} />
+            </button>
+
+            <span className="archival-overline text-accent">LOOK ARCHIVE ENTRY</span>
+            <h2 className="modal-title">Catalog Ensemble</h2>
             <p className="modal-subtitle">
-              Name this combination to preserve it in your personal lookbook.
+              Document this composite look ({canvasItems.length} pieces) into your personal wardrobe lookbook.
             </p>
 
             <form
@@ -732,14 +772,14 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
                 e.preventDefault();
                 handleConfirmSave();
               }}
-              className="save-outfit-form"
+              className="outfit-save-form"
             >
               <div className="form-group">
                 <label className="field-label font-mono">LOOK TITLE *</label>
                 <input
                   type="text"
                   className="field-input"
-                  placeholder="e.g. Rainy Day Studio Uniform"
+                  placeholder="e.g. Saturday Studio, Gallery Opening"
                   value={outfitTitle}
                   onChange={(e) => setOutfitTitle(e.target.value)}
                   autoFocus
@@ -762,7 +802,7 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
                 <label className="field-label font-mono">STYLING NOTES</label>
                 <textarea
                   className="field-textarea"
-                  placeholder="e.g. Trench unbuttoned, pants cuffed once, silver watch..."
+                  placeholder="e.g. Cardigan unbuttoned over tank, silver accessories..."
                   value={outfitNotes}
                   onChange={(e) => setOutfitNotes(e.target.value)}
                   rows={2}
@@ -793,26 +833,36 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
   );
 };
 
-// Subcomponent: Individual Slot Strip (ALL have NONE option)
+// Subcomponent: Individual Slot Strip with MULTI-SELECT support
 interface SlotCarouselStripProps {
   title: string;
   items: ClothingItem[];
-  selectedId: string | undefined;
-  onSelect: (id: string | null) => void;
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+  onClear: () => void;
   onCycle: (dir: 1 | -1) => void;
 }
 
 const SlotCarouselStrip: React.FC<SlotCarouselStripProps> = ({
   title,
   items,
-  selectedId,
-  onSelect,
+  selectedIds,
+  onToggle,
+  onClear,
   onCycle,
 }) => {
+  const activeCount = items.filter((i) => selectedIds.includes(i.id)).length;
+
   return (
     <div className="slot-carousel-strip">
       <div className="strip-header">
-        <span className="strip-title font-mono">{title}</span>
+        <div className="strip-title-group">
+          <span className="strip-title font-mono">{title}</span>
+          {activeCount > 0 && (
+            <span className="strip-active-count font-mono">{activeCount} ACTIVE</span>
+          )}
+        </div>
+
         <div className="strip-nav-arrows">
           <button
             type="button"
@@ -834,24 +884,25 @@ const SlotCarouselStrip: React.FC<SlotCarouselStripProps> = ({
       </div>
 
       <div className="strip-items-scroll hide-scrollbar">
-        {/* All categories can be set to NONE */}
+        {/* Clear category button */}
         <button
           type="button"
-          className={`strip-item-chip chip-none font-mono ${!selectedId ? 'selected' : ''}`}
-          onClick={() => onSelect(null)}
+          className={`strip-item-chip chip-none font-mono ${activeCount === 0 ? 'selected' : ''}`}
+          onClick={onClear}
         >
           NONE
         </button>
 
         {items.map((item) => {
-          const isSelected = item.id === selectedId;
+          const isSelected = selectedIds.includes(item.id);
           return (
             <button
               key={item.id}
               type="button"
               className={`strip-item-chip ${isSelected ? 'selected' : ''}`}
-              onClick={() => onSelect(item.id)}
+              onClick={() => onToggle(item.id)}
             >
+              {isSelected && <span className="chip-check-badge">✓</span>}
               <div className="chip-img-wrap">
                 <img src={item.imageUrl} alt={item.name} />
               </div>

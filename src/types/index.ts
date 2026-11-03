@@ -40,6 +40,7 @@ export interface OutfitSlotAssignment {
   shoesId?: string;
   outerwearId?: string;
   accessoryId?: string;
+  itemIds?: string[];
   canvasPositions?: Record<string, CanvasItemPosition>;
 }
 

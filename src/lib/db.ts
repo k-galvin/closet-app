@@ -245,6 +245,10 @@ export const deleteItem = async (id: string): Promise<void> => {
         changed = true;
       }
     });
+    if (outfit.slots.itemIds?.includes(id)) {
+      outfit.slots.itemIds = outfit.slots.itemIds.filter((itemId) => itemId !== id);
+      changed = true;
+    }
     if (changed) {
       outfit.slots = slots;
       await tx.objectStore('outfits').put(outfit);
