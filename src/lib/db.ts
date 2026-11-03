@@ -81,10 +81,21 @@ export const initDB = async (): Promise<void> => {
 export const getAllItems = async (): Promise<ClothingItem[]> => {
   await initDB();
   const db = await getDB();
+  const localItems = await db.getAll('items');
 
-  // Sync down any items saved to Supabase from other sessions/devices
+  // Automatic 2-way sync with Supabase cloud table
   try {
     const cloudItems = await fetchSupabaseItems();
+    const cloudIds = new Set(cloudItems.map((c) => c.id));
+
+    // 1. Push any local custom garments that aren't yet in Supabase table
+    for (const localItem of localItems) {
+      if (!cloudIds.has(localItem.id)) {
+        await syncClothingItemToSupabase(localItem);
+      }
+    }
+
+    // 2. Pull down any cloud items saved from other devices
     if (cloudItems.length > 0) {
       const tx = db.transaction('items', 'readwrite');
       for (const item of cloudItems) {
