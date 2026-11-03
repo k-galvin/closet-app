@@ -25,6 +25,29 @@ const DB_NAME = 'archival_closet_db';
 const DB_VERSION = 1;
 
 const SEEDED_FLAG = 'archival_closet_seeded_v1';
+const DELETED_ITEMS_KEY = 'archival_closet_deleted_ids_v1';
+const DEMO_PURGED_FLAG = 'archival_demo_purged_v2';
+export const DEMO_ITEM_IDS = [
+  'item-1', 'item-2', 'item-3', 'item-4', 'item-5',
+  'item-6', 'item-7', 'item-8', 'item-9'
+];
+
+export const getDeletedItemIds = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem(DELETED_ITEMS_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+};
+
+export const markItemAsDeleted = (id: string): void => {
+  try {
+    const set = getDeletedItemIds();
+    set.add(id);
+    localStorage.setItem(DELETED_ITEMS_KEY, JSON.stringify([...set]));
+  } catch {}
+};
 
 let dbPromise: Promise<IDBPDatabase<ClosetDB>> | null = null;
 
@@ -53,7 +76,7 @@ export const getDB = () => {
   return dbPromise;
 };
 
-// Seed initial data ONLY once on first app run.
+// Seed initial data ONLY once on first app run if user has no data in cloud or locally.
 // Never resurrect items deleted by the user.
 export const initDB = async (): Promise<void> => {
   const hasSeeded = localStorage.getItem(SEEDED_FLAG);
@@ -62,6 +85,15 @@ export const initDB = async (): Promise<void> => {
   const db = await getDB();
   const itemCount = await db.count('items');
   if (itemCount === 0) {
+    // If Supabase already has user's real items, skip sample seeding
+    try {
+      const cloudItems = await fetchSupabaseItems();
+      if (cloudItems.length > 0) {
+        localStorage.setItem(SEEDED_FLAG, 'true');
+        return;
+      }
+    } catch {}
+
     const tx = db.transaction(['items', 'collections', 'outfits'], 'readwrite');
     for (const item of INITIAL_ITEMS) {
       await tx.objectStore('items').put(item);
@@ -77,28 +109,80 @@ export const initDB = async (): Promise<void> => {
   localStorage.setItem(SEEDED_FLAG, 'true');
 };
 
+// Purge the 9 demo placeholder garments permanently
+export const purgeDemoItems = async (): Promise<void> => {
+  for (const id of DEMO_ITEM_IDS) {
+    markItemAsDeleted(id);
+  }
+
+  const db = await getDB();
+  const tx = db.transaction(['items', 'collections', 'outfits'], 'readwrite');
+  for (const id of DEMO_ITEM_IDS) {
+    await tx.objectStore('items').delete(id);
+  }
+  await tx.done;
+
+  // Ensure they are also deleted from Supabase cloud
+  for (const id of DEMO_ITEM_IDS) {
+    deleteClothingItemFromSupabase(id).catch(() => {});
+  }
+  localStorage.setItem(DEMO_PURGED_FLAG, 'true');
+};
+
 // Item Operations
 export const getAllItems = async (): Promise<ClothingItem[]> => {
   await initDB();
   const db = await getDB();
-  const localItems = await db.getAll('items');
+
+  // One-time auto-purge of demo items if the user has custom items
+  if (!localStorage.getItem(DEMO_PURGED_FLAG)) {
+    const all = await db.getAll('items');
+    const hasCustomItems = all.some((item) => !DEMO_ITEM_IDS.includes(item.id));
+    if (hasCustomItems) {
+      await purgeDemoItems();
+    }
+  }
+
+  const deletedIds = getDeletedItemIds();
+
+  // Clean out any lingering deleted items from IndexedDB
+  const initialLocal = await db.getAll('items');
+  const itemsToPurgeLocally = initialLocal.filter((i) => deletedIds.has(i.id));
+  if (itemsToPurgeLocally.length > 0) {
+    const purgeTx = db.transaction('items', 'readwrite');
+    for (const item of itemsToPurgeLocally) {
+      await purgeTx.objectStore('items').delete(item.id);
+    }
+    await purgeTx.done;
+  }
+
+  const localItems = (await db.getAll('items')).filter((i) => !deletedIds.has(i.id));
 
   // Automatic 2-way sync with Supabase cloud table
   try {
     const cloudItems = await fetchSupabaseItems();
-    const cloudIds = new Set(cloudItems.map((c) => c.id));
+    
+    // Purge any cloud items that match locally deleted IDs
+    for (const c of cloudItems) {
+      if (deletedIds.has(c.id)) {
+        deleteClothingItemFromSupabase(c.id).catch(() => {});
+      }
+    }
+
+    const validCloudItems = cloudItems.filter((c) => !deletedIds.has(c.id));
+    const cloudIds = new Set(validCloudItems.map((c) => c.id));
 
     // 1. Push any local custom garments that aren't yet in Supabase table
     for (const localItem of localItems) {
-      if (!cloudIds.has(localItem.id)) {
+      if (!cloudIds.has(localItem.id) && !deletedIds.has(localItem.id)) {
         await syncClothingItemToSupabase(localItem);
       }
     }
 
     // 2. Pull down any cloud items saved from other devices
-    if (cloudItems.length > 0) {
+    if (validCloudItems.length > 0) {
       const tx = db.transaction('items', 'readwrite');
-      for (const item of cloudItems) {
+      for (const item of validCloudItems) {
         await tx.objectStore('items').put(item);
       }
       await tx.done;
@@ -107,16 +191,25 @@ export const getAllItems = async (): Promise<ClothingItem[]> => {
     // Offline mode: proceed with local items
   }
 
-  const items = await db.getAll('items');
+  const items = (await db.getAll('items')).filter((i) => !deletedIds.has(i.id));
   return items.sort((a, b) => b.createdAt - a.createdAt);
 };
 
 export const getItemById = async (id: string): Promise<ClothingItem | undefined> => {
   const db = await getDB();
-  return db.get('items', id);
+  const item = await db.get('items', id);
+  if (!item || getDeletedItemIds().has(id)) return undefined;
+  return item;
 };
 
 export const saveItem = async (item: ClothingItem): Promise<void> => {
+  // If item was previously deleted, un-delete it
+  const deletedIds = getDeletedItemIds();
+  if (deletedIds.has(item.id)) {
+    deletedIds.delete(item.id);
+    localStorage.setItem(DELETED_ITEMS_KEY, JSON.stringify([...deletedIds]));
+  }
+
   const db = await getDB();
   await db.put('items', item);
   // Attempt background sync to Supabase table if configured
@@ -124,6 +217,10 @@ export const saveItem = async (item: ClothingItem): Promise<void> => {
 };
 
 export const deleteItem = async (id: string): Promise<void> => {
+  // 1. Mark as permanently deleted in local tombstone registry
+  markItemAsDeleted(id);
+
+  // 2. Remove from local IndexedDB
   const db = await getDB();
   const tx = db.transaction(['items', 'collections', 'outfits'], 'readwrite');
   await tx.objectStore('items').delete(id);
@@ -155,8 +252,13 @@ export const deleteItem = async (id: string): Promise<void> => {
   }
 
   await tx.done;
-  // Attempt to delete from Supabase table if configured
-  deleteClothingItemFromSupabase(id).catch(() => {});
+
+  // 3. Await deletion from Supabase so it does not resurrect on refresh
+  try {
+    await deleteClothingItemFromSupabase(id);
+  } catch {
+    // Offline or network error: tombstone prevents resurrection
+  }
 };
 
 // Collection Operations
@@ -213,6 +315,9 @@ export const deleteOutfit = async (id: string): Promise<void> => {
 
 // Reset to sample catalog
 export const resetToSeedData = async (): Promise<void> => {
+  localStorage.removeItem(DELETED_ITEMS_KEY);
+  localStorage.removeItem(DEMO_PURGED_FLAG);
+
   const db = await getDB();
   const tx = db.transaction(['items', 'collections', 'outfits'], 'readwrite');
   await tx.objectStore('items').clear();

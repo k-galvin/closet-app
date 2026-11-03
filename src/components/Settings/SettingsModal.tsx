@@ -12,6 +12,7 @@ import {
   Copy,
   Activity,
   AlertTriangle,
+  Trash2,
 } from 'lucide-react';
 import { ClothingItem } from '../../types';
 import {
@@ -25,7 +26,7 @@ import {
   uploadDataUrlToSupabase,
   syncClothingItemToSupabase,
 } from '../../lib/supabase';
-import { saveItem } from '../../lib/db';
+import { saveItem, purgeDemoItems } from '../../lib/db';
 import './SettingsModal.scss';
 
 interface SettingsModalProps {
@@ -351,6 +352,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 }}
               >
                 <RotateCcw size={13} /> RELOAD & UPDATE PWA
+              </button>
+
+              <button
+                type="button"
+                className="archival-btn-secondary"
+                onClick={async () => {
+                  if (window.confirm('Permanently remove sample items (ARC-CLO-001 through 009)? Your real clothes will stay safe.')) {
+                    await purgeDemoItems();
+                    await onRefreshData();
+                    onClose();
+                  }
+                }}
+              >
+                <Trash2 size={13} /> PURGE DEMO GARMENTS
               </button>
 
               <button
