@@ -163,6 +163,14 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
       {showCreateModal && (
         <div className="archival-modal-overlay" onClick={() => setShowCreateModal(false)}>
           <div className="archival-modal" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="close-modal-btn"
+              onClick={() => setShowCreateModal(false)}
+              aria-label="Close modal"
+            >
+              <X size={20} />
+            </button>
             <span className="archival-overline text-accent">NEW REGISTRY CAPSULE</span>
             <h2 className="modal-title">Create Collection</h2>
             <p className="modal-subtitle">
@@ -219,6 +227,14 @@ export const CollectionsView: React.FC<CollectionsViewProps> = ({
       {pickerCollectionId && activePickerCollection && (
         <div className="archival-modal-overlay" onClick={() => setPickerCollectionId(null)}>
           <div className="archival-modal picker-modal" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="close-modal-btn"
+              onClick={() => setPickerCollectionId(null)}
+              aria-label="Close packing modal"
+            >
+              <X size={20} />
+            </button>
             <span className="archival-overline text-accent">
               PACKING // {activePickerCollection.title.toUpperCase()}
             </span>
