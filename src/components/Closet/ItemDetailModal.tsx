@@ -119,11 +119,13 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             {/* Specimen Exhibition Plate */}
             <div className="detail-specimen-plate">
               <div className="specimen-tag font-mono">{item.catalogNumber}</div>
-              <img
-                src={item.imageUrl}
-                alt={item.name}
-                className="specimen-image"
-              />
+              <div className="specimen-image-container">
+                <img
+                  src={item.imageUrl}
+                  alt={item.name}
+                  className="specimen-image"
+                />
+              </div>
             </div>
 
             {/* Information Column */}
