@@ -1,6 +1,7 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { ClothingItem, Collection, Outfit } from '../types';
 import { INITIAL_ITEMS, INITIAL_COLLECTIONS, INITIAL_OUTFITS } from './seedData';
+import { syncClothingItemToSupabase, deleteClothingItemFromSupabase } from './supabase';
 
 interface ClosetDB extends DBSchema {
   items: {
@@ -22,6 +23,8 @@ interface ClosetDB extends DBSchema {
 
 const DB_NAME = 'archival_closet_db';
 const DB_VERSION = 1;
+
+const SEEDED_FLAG = 'archival_closet_seeded_v1';
 
 let dbPromise: Promise<IDBPDatabase<ClosetDB>> | null = null;
 
@@ -50,8 +53,12 @@ export const getDB = () => {
   return dbPromise;
 };
 
-// Seed initial data if database is empty or missing initial items
+// Seed initial data ONLY once on first app run.
+// Never resurrect items deleted by the user.
 export const initDB = async (): Promise<void> => {
+  const hasSeeded = localStorage.getItem(SEEDED_FLAG);
+  if (hasSeeded) return;
+
   const db = await getDB();
   const itemCount = await db.count('items');
   if (itemCount === 0) {
@@ -66,15 +73,8 @@ export const initDB = async (): Promise<void> => {
       await tx.objectStore('outfits').put(outfit);
     }
     await tx.done;
-  } else {
-    // Ensure any new default items (like dresses) are inserted if missing
-    for (const item of INITIAL_ITEMS) {
-      const existing = await db.get('items', item.id);
-      if (!existing) {
-        await db.put('items', item);
-      }
-    }
   }
+  localStorage.setItem(SEEDED_FLAG, 'true');
 };
 
 // Item Operations
@@ -93,6 +93,8 @@ export const getItemById = async (id: string): Promise<ClothingItem | undefined>
 export const saveItem = async (item: ClothingItem): Promise<void> => {
   const db = await getDB();
   await db.put('items', item);
+  // Attempt background sync to Supabase table if configured
+  syncClothingItemToSupabase(item).catch(() => {});
 };
 
 export const deleteItem = async (id: string): Promise<void> => {
@@ -127,6 +129,8 @@ export const deleteItem = async (id: string): Promise<void> => {
   }
 
   await tx.done;
+  // Attempt to delete from Supabase table if configured
+  deleteClothingItemFromSupabase(id).catch(() => {});
 };
 
 // Collection Operations
@@ -199,4 +203,5 @@ export const resetToSeedData = async (): Promise<void> => {
     await tx.objectStore('outfits').put(outfit);
   }
   await tx.done;
+  localStorage.setItem(SEEDED_FLAG, 'true');
 };

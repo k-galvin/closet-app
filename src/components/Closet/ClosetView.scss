@@ -7,9 +7,11 @@
   max-width: 1440px;
   margin: 0 auto;
   width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 
   @media (max-width: 900px) {
-    padding: 1.5rem 1.25rem 7rem;
+    padding: 1.25rem 0.85rem 7rem;
   }
 }
 
@@ -63,10 +65,12 @@
   display: flex;
   align-items: center;
   gap: 1.25rem;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
     width: 100%;
     justify-content: space-between;
+    gap: 0.5rem;
   }
 }
 
@@ -74,9 +78,11 @@
   position: relative;
   display: flex;
   align-items: center;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
     flex: 1;
+    min-width: 0;
   }
 
   .search-icon {
@@ -96,9 +102,11 @@
     width: 250px;
     outline: none;
     transition: all 0.25s ease;
+    box-sizing: border-box;
 
     @media (max-width: 768px) {
-      width: 100%;
+      width: 100% !important;
+      font-size: 14px; // prevents mobile Safari auto-zoom
     }
 
     &:focus {
@@ -107,7 +115,7 @@
       width: 280px;
 
       @media (max-width: 768px) {
-        width: 100%;
+        width: 100% !important;
       }
     }
 
@@ -284,21 +292,23 @@
 // Garments Grid
 .garments-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 2.5rem 1.75rem;
+  width: 100%;
+  box-sizing: border-box;
 
   @media (max-width: 1200px) {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   @media (max-width: 900px) {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1.75rem 1.25rem;
   }
 
   @media (max-width: 600px) {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1.5rem 0.85rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem 0.65rem;
   }
 }
 

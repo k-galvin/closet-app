@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ClothingItem, Collection } from '../../types';
-import { X, Trash2, Bookmark, Layers, Edit3, Check } from 'lucide-react';
+import { X, Trash2, Bookmark, Layers, Edit3, Check, Cloud, HardDrive, ArrowUpCircle } from 'lucide-react';
+import { isCloudUrl, uploadDataUrlToSupabase } from '../../lib/supabase';
 import './ItemDetailModal.scss';
 
 interface ItemDetailModalProps {
@@ -28,6 +29,8 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   const [editedDesigner, setEditedDesigner] = useState('');
   const [editedFabric, setEditedFabric] = useState('');
   const [editedNotes, setEditedNotes] = useState('');
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [cloudSyncMsg, setCloudSyncMsg] = useState<string | null>(null);
 
   if (!item) return null;
 
@@ -50,6 +53,26 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
     });
     setIsEditing(false);
   };
+
+  const handleSyncToCloud = async () => {
+    if (!item.imageUrl.startsWith('data:')) return;
+    setIsSyncingCloud(true);
+    setCloudSyncMsg('Uploading to Supabase Storage...');
+    const result = await uploadDataUrlToSupabase(item.imageUrl, item.catalogNumber);
+    if (result.success && result.isCloud) {
+      onUpdate({
+        ...item,
+        imageUrl: result.url,
+        updatedAt: Date.now(),
+      });
+      setCloudSyncMsg('✓ Successfully synced to Supabase Cloud Storage!');
+    } else {
+      setCloudSyncMsg(`Cloud sync failed: ${result.error || 'Check Supabase bucket settings.'}`);
+    }
+    setIsSyncingCloud(false);
+  };
+
+  const isCloud = isCloudUrl(item.imageUrl);
 
   return (
     <div className="archival-modal-overlay" onClick={onClose}>
@@ -106,9 +129,24 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
             {/* Information Column */}
             <div className="detail-info-pane">
               <div className="info-header">
-                <span className="archival-overline text-accent">
-                  {item.category.toUpperCase()} // REGISTRY RECORD
-                </span>
+                <div className="header-meta-row">
+                  <span className="archival-overline text-accent">
+                    {item.category.toUpperCase()} // REGISTRY RECORD
+                  </span>
+
+                  {/* Cloud / Local Storage Indicator Badge */}
+                  <div className="storage-status-pill font-mono">
+                    {isCloud ? (
+                      <span className="badge-cloud" title="Hosted on Supabase Storage">
+                        <Cloud size={10} /> SUPABASE CLOUD
+                      </span>
+                    ) : (
+                      <span className="badge-local" title="Stored locally in device IndexedDB">
+                        <HardDrive size={10} /> LOCAL OFFLINE
+                      </span>
+                    )}
+                  </div>
+                </div>
 
                 {isEditing ? (
                   <div className="edit-form-block">
@@ -146,7 +184,7 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                         className="archival-btn-primary"
                         onClick={handleSaveEdit}
                       >
-                        <Check size={12} /> SAVE
+                        <Check size={12} /> SAVE CHANGES
                       </button>
                       <button
                         type="button"
@@ -201,6 +239,24 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       </span>
                     </div>
                   </div>
+
+                  {/* Sync to Supabase button for offline items */}
+                  {!isCloud && (
+                    <div className="sync-cloud-prompt">
+                      <button
+                        type="button"
+                        className="sync-cloud-btn font-mono"
+                        onClick={handleSyncToCloud}
+                        disabled={isSyncingCloud}
+                      >
+                        <ArrowUpCircle size={12} />
+                        {isSyncingCloud ? 'UPLOADING TO SUPABASE...' : 'UPLOAD IMAGE TO SUPABASE CLOUD'}
+                      </button>
+                      {cloudSyncMsg && (
+                        <span className="cloud-msg font-mono">{cloudSyncMsg}</span>
+                      )}
+                    </div>
+                  )}
 
                   {item.notes && (
                     <div className="specimen-notes-box">
@@ -258,6 +314,14 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                       title="Delete item"
                     >
                       <Trash2 size={13} />
+                    </button>
+
+                    <button
+                      type="button"
+                      className="archival-btn-secondary close-bar-btn"
+                      onClick={onClose}
+                    >
+                      CLOSE
                     </button>
                   </div>
                 </>

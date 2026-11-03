@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { ClothingItem } from '../types';
 
 const DEFAULT_URL = 'https://oaqzbymmhusbhvscfcrp.supabase.co';
 const DEFAULT_KEY = 'sb_publishable_Y8hY9if-e5PdwcmCKALzsQ_bzUpYVHp';
@@ -32,18 +33,177 @@ export const setSupabaseConfig = (url: string, anonKey: string) => {
   supabaseInstance = url && anonKey ? createClient(url, anonKey) : null;
 };
 
-// Storage upload helper
-export const uploadClothingImage = async (file: File): Promise<string | null> => {
+export const isCloudUrl = (url: string): boolean => {
+  if (!url) return false;
+  return url.startsWith('http://') || url.startsWith('https://');
+};
+
+export interface UploadResult {
+  success: boolean;
+  url: string;
+  isCloud: boolean;
+  error?: string;
+}
+
+export const SQL_STORAGE_SETUP = `-- Run this in your Supabase SQL Editor:
+-- 1. Create public storage bucket
+insert into storage.buckets (id, name, public)
+values ('closet-images', 'closet-images', true)
+on conflict (id) do nothing;
+
+-- 2. Allow public access to upload and view photos
+drop policy if exists "Allow Public All" on storage.objects;
+create policy "Allow Public All"
+on storage.objects for all
+using (bucket_id = 'closet-images')
+with check (bucket_id = 'closet-images');`;
+
+export const SQL_TABLE_SETUP = `-- Optional: Closet Items table in Supabase
+create table if not exists public.closet_items (
+  id text primary key,
+  catalog_number text,
+  name text,
+  category text,
+  subcategory text,
+  designer text,
+  color text,
+  fabric text,
+  seasons text[],
+  notes text,
+  image_url text,
+  created_at bigint,
+  updated_at bigint
+);
+
+alter table public.closet_items enable row level security;
+drop policy if exists "Allow public access to closet_items" on public.closet_items;
+create policy "Allow public access to closet_items"
+on public.closet_items for all
+using (true)
+with check (true);`;
+
+// Test Supabase connectivity, bucket existence, and write permissions
+export interface SupabaseHealth {
+  connected: boolean;
+  projectUrl: string;
+  bucketExists: boolean;
+  bucketName: string;
+  canUpload: boolean;
+  error?: string;
+}
+
+export const testSupabaseHealth = async (): Promise<SupabaseHealth> => {
   const client = getSupabaseClient();
-  if (!client) return null;
+  const { url } = getSupabaseConfig();
+
+  if (!client) {
+    return {
+      connected: false,
+      projectUrl: url,
+      bucketExists: false,
+      bucketName: 'closet-images',
+      canUpload: false,
+      error: 'Supabase client is not configured.',
+    };
+  }
+
+  try {
+    // 1. Check if we can reach the storage API & list buckets
+    const { data: buckets, error: listError } = await client.storage.listBuckets();
+
+    if (listError) {
+      return {
+        connected: false,
+        projectUrl: url,
+        bucketExists: false,
+        bucketName: 'closet-images',
+        canUpload: false,
+        error: `Could not reach Supabase storage: ${listError.message}`,
+      };
+    }
+
+    const targetBucket = buckets?.find((b) => b.name === 'closet-images' || b.id === 'closet-images')
+      || buckets?.find((b) => b.name === 'item-photos' || b.id === 'item-photos');
+
+    const bucketName = targetBucket?.name || 'closet-images';
+    const bucketExists = Boolean(targetBucket);
+
+    if (!bucketExists) {
+      return {
+        connected: true,
+        projectUrl: url,
+        bucketExists: false,
+        bucketName: 'closet-images',
+        canUpload: false,
+        error: 'Bucket "closet-images" does not exist yet in Supabase. Run the SQL script below to create it.',
+      };
+    }
+
+    // 2. Test upload permissions with a tiny file
+    const testFileName = `health-check-${Date.now()}.txt`;
+    const testBlob = new Blob(['archival-health-ping'], { type: 'text/plain' });
+
+    const { error: uploadError } = await client.storage
+      .from(bucketName)
+      .upload(testFileName, testBlob, { upsert: true });
+
+    if (uploadError) {
+      return {
+        connected: true,
+        projectUrl: url,
+        bucketExists: true,
+        bucketName,
+        canUpload: false,
+        error: `Bucket exists, but upload was rejected by RLS: ${uploadError.message}. Run the SQL script below to enable public uploads.`,
+      };
+    }
+
+    // Clean up test file
+    await client.storage.from(bucketName).remove([testFileName]);
+
+    return {
+      connected: true,
+      projectUrl: url,
+      bucketExists: true,
+      bucketName,
+      canUpload: true,
+    };
+  } catch (err) {
+    return {
+      connected: false,
+      projectUrl: url,
+      bucketExists: false,
+      bucketName: 'closet-images',
+      canUpload: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+};
+
+// Storage upload helper with fallback and detailed status
+export const uploadClothingImage = async (
+  file: File,
+  fallbackDataUrl?: string
+): Promise<UploadResult> => {
+  const client = getSupabaseClient();
+  const fallback = fallbackDataUrl || '';
+
+  if (!client) {
+    return {
+      success: false,
+      url: fallback,
+      isCloud: false,
+      error: 'Supabase client is not configured. Saved locally.',
+    };
+  }
 
   try {
     const ext = file.name.split('.').pop() || 'png';
     const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${ext}`;
     const filePath = `items/${filename}`;
 
-    // Try 'closet-images' first, then 'item-photos'
     const bucketsToTry = ['closet-images', 'item-photos'];
+    let lastError: string | undefined;
 
     for (const bucketName of bucketsToTry) {
       const { error: uploadError } = await client.storage
@@ -52,13 +212,103 @@ export const uploadClothingImage = async (file: File): Promise<string | null> =>
 
       if (!uploadError) {
         const { data } = client.storage.from(bucketName).getPublicUrl(filePath);
-        return data.publicUrl;
+        return {
+          success: true,
+          url: data.publicUrl,
+          isCloud: true,
+        };
+      } else {
+        lastError = uploadError.message;
       }
     }
 
-    return null;
+    return {
+      success: false,
+      url: fallback,
+      isCloud: false,
+      error: lastError || 'Bucket "closet-images" upload failed.',
+    };
   } catch (err) {
-    console.warn('Supabase storage upload error, falling back to local storage:', err);
-    return null;
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false,
+      url: fallback,
+      isCloud: false,
+      error: errMsg,
+    };
+  }
+};
+
+// Convert Data URL to Blob and upload to Supabase
+export const uploadDataUrlToSupabase = async (
+  dataUrl: string,
+  fileNamePrefix: string = 'garment'
+): Promise<UploadResult> => {
+  try {
+    const arr = dataUrl.split(',');
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    const ext = mime.split('/')[1] || 'png';
+    const file = new File([u8arr], `${fileNamePrefix}.${ext}`, { type: mime });
+    return uploadClothingImage(file, dataUrl);
+  } catch (err) {
+    return {
+      success: false,
+      url: dataUrl,
+      isCloud: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+};
+
+// Sync item metadata to Supabase closet_items table if available
+export const syncClothingItemToSupabase = async (item: ClothingItem): Promise<boolean> => {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const row = {
+      id: item.id,
+      catalog_number: item.catalogNumber,
+      name: item.name,
+      category: item.category,
+      subcategory: item.subcategory || null,
+      designer: item.designer || null,
+      color: item.color,
+      fabric: item.fabric || null,
+      seasons: item.seasons,
+      notes: item.notes || null,
+      image_url: item.imageUrl,
+      created_at: item.createdAt,
+      updated_at: item.updatedAt,
+    };
+
+    const { error } = await client.from('closet_items').upsert(row, { onConflict: 'id' });
+    if (error) {
+      // If table does not exist or RLS blocks it, log silently
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Delete item from Supabase table if available
+export const deleteClothingItemFromSupabase = async (id: string): Promise<boolean> => {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('closet_items').delete().eq('id', id);
+    return !error;
+  } catch {
+    return false;
   }
 };

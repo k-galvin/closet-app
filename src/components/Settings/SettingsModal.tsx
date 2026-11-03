@@ -1,11 +1,37 @@
 import React, { useState } from 'react';
-import { X, Check, Database, Smartphone, RotateCcw, Download, UploadCloud } from 'lucide-react';
-import { getSupabaseConfig, setSupabaseConfig } from '../../lib/supabase';
+import {
+  X,
+  Check,
+  Database,
+  Smartphone,
+  RotateCcw,
+  Download,
+  UploadCloud,
+  Cloud,
+  HardDrive,
+  Copy,
+  Activity,
+  AlertTriangle,
+} from 'lucide-react';
+import { ClothingItem } from '../../types';
+import {
+  getSupabaseConfig,
+  setSupabaseConfig,
+  testSupabaseHealth,
+  SupabaseHealth,
+  SQL_STORAGE_SETUP,
+  SQL_TABLE_SETUP,
+  isCloudUrl,
+  uploadDataUrlToSupabase,
+} from '../../lib/supabase';
+import { saveItem } from '../../lib/db';
 import './SettingsModal.scss';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  items: ClothingItem[];
+  onRefreshData: () => Promise<void>;
   onResetSeedData: () => void;
   onExportData: () => void;
 }
@@ -13,6 +39,8 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
+  items,
+  onRefreshData,
   onResetSeedData,
   onExportData,
 }) => {
@@ -20,6 +48,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [supabaseUrl, setSupabaseUrl] = useState(currentConfig.url);
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(currentConfig.anonKey);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Diagnostic state
+  const [healthStatus, setHealthStatus] = useState<SupabaseHealth | null>(null);
+  const [isTestingHealth, setIsTestingHealth] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  // Batch sync state
+  const [isBatchSyncing, setIsBatchSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -29,6 +66,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2500);
   };
+
+  const handleTestHealth = async () => {
+    setIsTestingHealth(true);
+    setHealthStatus(null);
+    try {
+      const health = await testSupabaseHealth();
+      setHealthStatus(health);
+    } catch (err) {
+      setHealthStatus({
+        connected: false,
+        projectUrl: supabaseUrl,
+        bucketExists: false,
+        bucketName: 'closet-images',
+        canUpload: false,
+        error: String(err),
+      });
+    } finally {
+      setIsTestingHealth(false);
+    }
+  };
+
+  const handleCopySql = () => {
+    const fullSql = `${SQL_STORAGE_SETUP}\n\n${SQL_TABLE_SETUP}`;
+    navigator.clipboard.writeText(fullSql);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 2500);
+  };
+
+  const handleSyncAllLocalItems = async () => {
+    const localItems = items.filter((item) => !isCloudUrl(item.imageUrl) && item.imageUrl.startsWith('data:'));
+    if (localItems.length === 0) {
+      setSyncProgress('All items are already hosted on Supabase Cloud!');
+      return;
+    }
+
+    setIsBatchSyncing(true);
+    let successCount = 0;
+
+    for (let i = 0; i < localItems.length; i++) {
+      const item = localItems[i];
+      setSyncProgress(`Uploading garment ${i + 1} of ${localItems.length}: ${item.name}...`);
+      const result = await uploadDataUrlToSupabase(item.imageUrl, item.catalogNumber);
+      if (result.success && result.isCloud) {
+        await saveItem({
+          ...item,
+          imageUrl: result.url,
+          updatedAt: Date.now(),
+        });
+        successCount++;
+      }
+    }
+
+    await onRefreshData();
+    setIsBatchSyncing(false);
+    setSyncProgress(`✓ Migrated ${successCount} of ${localItems.length} garments to Supabase Cloud!`);
+  };
+
+  const cloudItemsCount = items.filter((item) => isCloudUrl(item.imageUrl)).length;
+  const localItemsCount = items.length - cloudItemsCount;
 
   return (
     <div className="archival-modal-overlay" onClick={onClose}>
@@ -46,37 +142,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </button>
 
         <span className="archival-overline text-accent">SYSTEM CONFIGURATION // ARCHIVAL</span>
-        <h2 className="modal-title">Settings & Sync</h2>
+        <h2 className="modal-title">Settings & Cloud Sync</h2>
         <p className="modal-subtitle">
-          Configure remote Supabase cloud storage, backup data, or review iPhone installation.
+          Manage Supabase storage, test cloud sync health, backup inventory, or review iPhone installation.
         </p>
 
         <div className="settings-sections-list">
-          {/* iOS Installation Instructions */}
+          {/* Storage Status & Metrics Breakdown */}
           <section className="settings-block">
             <div className="block-title font-mono">
-              <Smartphone size={13} /> IPHONE HOMESCREEN APP
+              <Database size={13} /> CLOUD STORAGE AUDIT
             </div>
-            <div className="ios-instructions-box">
-              <p>
-                To install as a dedicated fullscreen app on your iPhone without Safari UI:
-              </p>
-              <ol className="ios-steps font-mono">
-                <li>1. Open this URL in Safari on your iPhone</li>
-                <li>2. Tap the <strong>Share</strong> button (box with upward arrow)</li>
-                <li>3. Select <strong>"Add to Home Screen"</strong></li>
-                <li>4. Tap <strong>"Add"</strong> in the top-right corner</li>
-              </ol>
+            <div className="storage-audit-card font-mono">
+              <div className="audit-metric">
+                <span className="metric-label">TOTAL CATALOG</span>
+                <span className="metric-num">{items.length}</span>
+              </div>
+              <div className="audit-metric">
+                <span className="metric-label">
+                  <Cloud size={11} className="text-accent" /> SUPABASE CLOUD
+                </span>
+                <span className="metric-num text-accent">{cloudItemsCount}</span>
+              </div>
+              <div className="audit-metric">
+                <span className="metric-label">
+                  <HardDrive size={11} /> LOCAL STORAGE
+                </span>
+                <span className="metric-num">{localItemsCount}</span>
+              </div>
             </div>
+
+            {localItemsCount > 0 && (
+              <div className="sync-all-action">
+                <button
+                  type="button"
+                  className="archival-btn-secondary sync-all-btn font-mono"
+                  onClick={handleSyncAllLocalItems}
+                  disabled={isBatchSyncing}
+                >
+                  <UploadCloud size={12} />
+                  {isBatchSyncing ? 'MIGRATING TO SUPABASE...' : `SYNC ${localItemsCount} LOCAL ITEMS TO SUPABASE`}
+                </button>
+                {syncProgress && (
+                  <span className="sync-progress-msg font-mono">{syncProgress}</span>
+                )}
+              </div>
+            )}
           </section>
 
-          {/* Supabase Integration */}
+          {/* Supabase Integration & Credentials */}
           <section className="settings-block">
             <div className="block-title font-mono">
-              <Database size={13} /> SUPABASE SYNC (OPTIONAL)
+              <Database size={13} /> SUPABASE CONNECTION
             </div>
             <p className="block-desc">
-              Connect to your Supabase project (same backend as your Archival project) for multi-device sync and cloud image hosting. By default, everything works completely offline in your browser's IndexedDB.
+              Your garments and photos connect to Supabase project{' '}
+              <code className="font-mono text-accent">oaqzbymmhusbhvscfcrp</code>.
             </p>
 
             <form onSubmit={handleSaveSupabase} className="supabase-form">
@@ -103,13 +224,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div className="supabase-actions-row">
-                <div className="connection-status font-mono">
-                  STATUS: {currentConfig.isConfigured ? (
-                    <span className="text-accent font-bold">CONNECTED TO CLOUD</span>
-                  ) : (
-                    <span className="text-muted">LOCAL OFFLINE STORAGE</span>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  className="archival-btn-secondary"
+                  onClick={handleTestHealth}
+                  disabled={isTestingHealth}
+                >
+                  <Activity size={12} /> {isTestingHealth ? 'TESTING...' : 'TEST CLOUD STORAGE'}
+                </button>
 
                 <button type="submit" className="archival-btn-primary">
                   {saveSuccess ? (
@@ -122,6 +244,67 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               </div>
             </form>
+
+            {/* Health Test Result Card */}
+            {healthStatus && (
+              <div className={`health-result-box ${healthStatus.canUpload ? 'success' : 'warning'}`}>
+                <div className="result-header font-mono">
+                  {healthStatus.canUpload ? (
+                    <>
+                      <Check size={14} className="text-accent" />
+                      <span>SUPABASE STORAGE: VERIFIED & OPERATIONAL</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle size={14} color="#d9381e" />
+                      <span>STORAGE SETUP REQUIRED</span>
+                    </>
+                  )}
+                </div>
+
+                <div className="result-details font-mono">
+                  <p>Target Bucket: <strong>{healthStatus.bucketName}</strong></p>
+                  <p>Bucket Exists: {healthStatus.bucketExists ? '✓ YES' : '✗ NO'}</p>
+                  <p>Write Permissions: {healthStatus.canUpload ? '✓ PUBLIC UPLOAD OK' : '✗ BLOCKED'}</p>
+                  {healthStatus.error && (
+                    <p className="error-note">Diagnostic: {healthStatus.error}</p>
+                  )}
+                </div>
+
+                {!healthStatus.canUpload && (
+                  <div className="sql-action-card">
+                    <p className="sql-hint">
+                      Run this in Supabase <strong>SQL Editor</strong> to enable the public storage bucket:
+                    </p>
+                    <button
+                      type="button"
+                      className="archival-btn-secondary copy-sql-btn"
+                      onClick={handleCopySql}
+                    >
+                      <Copy size={12} /> {copiedSql ? 'COPIED TO CLIPBOARD!' : 'COPY SUPABASE SQL SCRIPT'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* iOS Installation Instructions */}
+          <section className="settings-block">
+            <div className="block-title font-mono">
+              <Smartphone size={13} /> IPHONE HOMESCREEN APP
+            </div>
+            <div className="ios-instructions-box">
+              <p>
+                To install as a dedicated fullscreen app on your iPhone without Safari UI:
+              </p>
+              <ol className="ios-steps font-mono">
+                <li>1. Open this URL in Safari on your iPhone</li>
+                <li>2. Tap the <strong>Share</strong> button (box with upward arrow)</li>
+                <li>3. Select <strong>"Add to Home Screen"</strong></li>
+                <li>4. Tap <strong>"Add"</strong> in the top-right corner</li>
+              </ol>
+            </div>
           </section>
 
           {/* Data Maintenance */}

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { ClothingCategory, ClothingItem, Season } from '../../types';
-import { Upload, X, Check } from 'lucide-react';
-import { uploadClothingImage } from '../../lib/supabase';
+import { Upload, X, Check, Cloud, HardDrive } from 'lucide-react';
+import { uploadClothingImage, getSupabaseConfig } from '../../lib/supabase';
 import './AcquireModal.scss';
 
 interface AcquireModalProps {
@@ -39,8 +39,10 @@ export const AcquireModal: React.FC<AcquireModalProps> = ({
   const [imageDataUrl, setImageDataUrl] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { isConfigured } = getSupabaseConfig();
 
   if (!isOpen) return null;
 
@@ -52,6 +54,7 @@ export const AcquireModal: React.FC<AcquireModalProps> = ({
     const reader = new FileReader();
     reader.onload = (event) => {
       setImageDataUrl(event.target?.result as string);
+      setUploadStatus('');
     };
     reader.readAsDataURL(file);
   };
@@ -71,11 +74,15 @@ export const AcquireModal: React.FC<AcquireModalProps> = ({
     setIsUploading(true);
 
     let finalImageUrl = imageDataUrl;
-    // Attempt Supabase upload if available
+
     if (selectedFile) {
-      const remoteUrl = await uploadClothingImage(selectedFile);
-      if (remoteUrl) {
-        finalImageUrl = remoteUrl;
+      setUploadStatus('Uploading to Supabase Storage...');
+      const result = await uploadClothingImage(selectedFile, imageDataUrl);
+      if (result.success && result.isCloud) {
+        finalImageUrl = result.url;
+        setUploadStatus('✓ Uploaded to Supabase Cloud Storage');
+      } else {
+        setUploadStatus('Saved locally to device storage (Supabase bucket pending)');
       }
     }
 
@@ -125,7 +132,7 @@ export const AcquireModal: React.FC<AcquireModalProps> = ({
 
         <form onSubmit={handleSubmit} className="acquire-form">
           <div className="acquire-grid">
-            {/* Left: Transparent Image Uploader Area (Archival large preview box) */}
+            {/* Left: Transparent Image Uploader Area */}
             <div className="upload-plate-pane">
               <input
                 ref={fileInputRef}
@@ -165,6 +172,22 @@ export const AcquireModal: React.FC<AcquireModalProps> = ({
                 <span className="label">ASSIGNED CODE:</span>
                 <span className="value text-accent">{nextCatalogNumber}</span>
               </div>
+
+              <div className="storage-target-badge font-mono">
+                {isConfigured ? (
+                  <span className="cloud-target">
+                    <Cloud size={11} /> TARGET: SUPABASE CLOUD
+                  </span>
+                ) : (
+                  <span className="local-target">
+                    <HardDrive size={11} /> TARGET: LOCAL STORAGE
+                  </span>
+                )}
+              </div>
+
+              {uploadStatus && (
+                <div className="upload-status-hint font-mono">{uploadStatus}</div>
+              )}
             </div>
 
             {/* Right: Metadata fields */}

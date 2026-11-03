@@ -245,6 +245,8 @@ export function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        items={items}
+        onRefreshData={refreshData}
         onResetSeedData={handleResetSeedData}
         onExportData={handleExportData}
       />

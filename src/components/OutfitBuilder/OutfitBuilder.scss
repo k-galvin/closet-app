@@ -7,9 +7,11 @@
   max-width: 1440px;
   margin: 0 auto;
   width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 
   @media (max-width: 900px) {
-    padding: 1.25rem 1.25rem 7rem;
+    padding: 1.25rem 0.85rem 7rem;
   }
 }
 
