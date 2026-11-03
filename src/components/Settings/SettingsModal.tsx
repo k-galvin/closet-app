@@ -110,11 +110,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setSyncProgress(`Uploading garment ${i + 1} of ${localItems.length}: ${item.name}...`);
       const result = await uploadDataUrlToSupabase(item.imageUrl, item.catalogNumber);
       if (result.success && result.isCloud) {
-        await saveItem({
+        const updatedItem = {
           ...item,
           imageUrl: result.url,
           updatedAt: Date.now(),
-        });
+        };
+        await saveItem(updatedItem);
         successCount++;
       } else {
         lastError = result.error;
@@ -326,6 +327,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={onExportData}
               >
                 <Download size={13} /> EXPORT BACKUP JSON
+              </button>
+
+              <button
+                type="button"
+                className="archival-btn-secondary"
+                onClick={() => {
+                  if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then((registrations) => {
+                      for (const reg of registrations) reg.unregister();
+                      window.location.reload();
+                    });
+                  } else {
+                    window.location.reload();
+                  }
+                }}
+              >
+                <RotateCcw size={13} /> RELOAD & UPDATE PWA
               </button>
 
               <button
