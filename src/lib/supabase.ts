@@ -108,65 +108,43 @@ export const testSupabaseHealth = async (): Promise<SupabaseHealth> => {
   }
 
   try {
-    // 1. Check if we can reach the storage API & list buckets
-    const { data: buckets, error: listError } = await client.storage.listBuckets();
-
-    if (listError) {
-      return {
-        connected: false,
-        projectUrl: url,
-        bucketExists: false,
-        bucketName: 'closet-images',
-        canUpload: false,
-        error: `Could not reach Supabase storage: ${listError.message}`,
-      };
-    }
-
-    const targetBucket = buckets?.find((b) => b.name === 'closet-images' || b.id === 'closet-images')
-      || buckets?.find((b) => b.name === 'item-photos' || b.id === 'item-photos');
-
-    const bucketName = targetBucket?.name || 'closet-images';
-    const bucketExists = Boolean(targetBucket);
-
-    if (!bucketExists) {
-      return {
-        connected: true,
-        projectUrl: url,
-        bucketExists: false,
-        bucketName: 'closet-images',
-        canUpload: false,
-        error: 'Bucket "closet-images" does not exist yet in Supabase. Run the SQL script below to create it.',
-      };
-    }
-
-    // 2. Test upload permissions with a tiny file
+    const bucketName = 'closet-images';
     const testFileName = `health-check-${Date.now()}.txt`;
     const testBlob = new Blob(['archival-health-ping'], { type: 'text/plain' });
 
+    // Directly test upload permissions on closet-images bucket
     const { error: uploadError } = await client.storage
       .from(bucketName)
       .upload(testFileName, testBlob, { upsert: true });
 
-    if (uploadError) {
+    if (!uploadError) {
+      // Clean up test file
+      await client.storage.from(bucketName).remove([testFileName]);
       return {
         connected: true,
         projectUrl: url,
         bucketExists: true,
         bucketName,
-        canUpload: false,
-        error: `Bucket exists, but upload was rejected by RLS: ${uploadError.message}. Run the SQL script below to enable public uploads.`,
+        canUpload: true,
       };
     }
 
-    // Clean up test file
-    await client.storage.from(bucketName).remove([testFileName]);
+    // If upload had an error, analyze it
+    const msg = uploadError.message.toLowerCase();
+    const isBucketMissing = msg.includes('bucket not found') || msg.includes('not found');
+    const isRls = msg.includes('policy') || msg.includes('row-level security') || msg.includes('violates');
 
     return {
       connected: true,
       projectUrl: url,
-      bucketExists: true,
+      bucketExists: !isBucketMissing,
       bucketName,
-      canUpload: true,
+      canUpload: false,
+      error: isBucketMissing
+        ? 'Bucket "closet-images" was not found in Supabase.'
+        : isRls
+        ? `Upload was blocked by RLS policy: ${uploadError.message}`
+        : uploadError.message,
     };
   } catch (err) {
     return {
