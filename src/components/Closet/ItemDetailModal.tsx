@@ -1,7 +1,18 @@
-import React, { useState } from 'react';
-import { ClothingItem, Collection } from '../../types';
-import { X, Trash2, Bookmark, Layers, Edit3, Check, Cloud, HardDrive, ArrowUpCircle } from 'lucide-react';
-import { isCloudUrl, uploadDataUrlToSupabase } from '../../lib/supabase';
+import React, { useState, useRef } from 'react';
+import { ClothingCategory, ClothingItem, Collection, Season } from '../../types';
+import {
+  X,
+  Trash2,
+  Bookmark,
+  Layers,
+  Edit3,
+  Check,
+  Cloud,
+  HardDrive,
+  ArrowUpCircle,
+  Camera,
+} from 'lucide-react';
+import { isCloudUrl, uploadDataUrlToSupabase, uploadClothingImage } from '../../lib/supabase';
 import './ItemDetailModal.scss';
 
 interface ItemDetailModalProps {
@@ -14,6 +25,18 @@ interface ItemDetailModalProps {
   onSendToOutfitBuilder: (item: ClothingItem) => void;
 }
 
+const CATEGORIES: { label: string; value: ClothingCategory }[] = [
+  { label: 'Tops', value: 'tops' },
+  { label: 'Bottoms', value: 'bottoms' },
+  { label: 'Dresses', value: 'dresses' },
+  { label: 'Outerwear', value: 'outerwear' },
+  { label: 'Shoes', value: 'shoes' },
+  { label: 'Accessories', value: 'accessories' },
+  { label: 'One-Piece', value: 'one-piece' },
+];
+
+const SEASONS: Season[] = ['spring', 'summer', 'fall', 'winter'];
+
 export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
   item,
   collections,
@@ -25,32 +48,89 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 }) => {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+
+  // Form edit states
   const [editedName, setEditedName] = useState('');
+  const [editedCategory, setEditedCategory] = useState<ClothingCategory>('tops');
+  const [editedSubcategory, setEditedSubcategory] = useState('');
   const [editedDesigner, setEditedDesigner] = useState('');
+  const [editedColor, setEditedColor] = useState('');
   const [editedFabric, setEditedFabric] = useState('');
+  const [editedSeasons, setEditedSeasons] = useState<Season[]>([]);
   const [editedNotes, setEditedNotes] = useState('');
+  const [editedImageUrl, setEditedImageUrl] = useState('');
+  const [editedFile, setEditedFile] = useState<File | null>(null);
+
+  const [isSaving, setIsSaving] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [cloudSyncMsg, setCloudSyncMsg] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!item) return null;
 
   const handleStartEdit = () => {
     setEditedName(item.name);
+    setEditedCategory(item.category);
+    setEditedSubcategory(item.subcategory || '');
     setEditedDesigner(item.designer || '');
+    setEditedColor(item.color || '');
     setEditedFabric(item.fabric || '');
+    setEditedSeasons(item.seasons ? [...item.seasons] : ['fall', 'winter']);
     setEditedNotes(item.notes || '');
+    setEditedImageUrl(item.imageUrl);
+    setEditedFile(null);
     setIsEditing(true);
   };
 
-  const handleSaveEdit = () => {
-    onUpdate({
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setEditedFile(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setEditedImageUrl(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const toggleSeason = (season: Season) => {
+    if (editedSeasons.includes(season)) {
+      setEditedSeasons(editedSeasons.filter((s) => s !== season));
+    } else {
+      setEditedSeasons([...editedSeasons, season]);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    setIsSaving(true);
+    let finalImageUrl = editedImageUrl;
+
+    // If user selected a new photo file, upload it
+    if (editedFile) {
+      const result = await uploadClothingImage(editedFile, editedImageUrl);
+      if (result.success && result.isCloud) {
+        finalImageUrl = result.url;
+      }
+    }
+
+    const updatedItem: ClothingItem = {
       ...item,
       name: editedName.trim() || item.name,
+      category: editedCategory,
+      subcategory: editedSubcategory.trim() || undefined,
       designer: editedDesigner.trim() || undefined,
+      color: editedColor.trim() || item.color || 'Monochrome',
       fabric: editedFabric.trim() || undefined,
+      seasons: editedSeasons.length > 0 ? editedSeasons : item.seasons,
       notes: editedNotes.trim() || undefined,
+      imageUrl: finalImageUrl,
       updatedAt: Date.now(),
-    });
+    };
+
+    onUpdate(updatedItem);
+    setIsSaving(false);
     setIsEditing(false);
   };
 
@@ -121,11 +201,31 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               <div className="specimen-tag font-mono">{item.catalogNumber}</div>
               <div className="specimen-image-container">
                 <img
-                  src={item.imageUrl}
-                  alt={item.name}
+                  src={isEditing ? editedImageUrl : item.imageUrl}
+                  alt={isEditing ? editedName || item.name : item.name}
                   className="specimen-image"
                 />
+
+                {isEditing && (
+                  <button
+                    type="button"
+                    className="replace-photo-btn font-mono"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Camera size={13} />
+                    <span>{editedFile ? 'PHOTO READY TO SAVE' : 'CHANGE PHOTO'}</span>
+                  </button>
+                )}
               </div>
+
+              {/* Hidden file input for changing the garment photo */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/webp,image/jpeg,image/svg+xml"
+                style={{ display: 'none' }}
+                onChange={handlePhotoChange}
+              />
             </div>
 
             {/* Information Column */}
@@ -133,7 +233,9 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
               <div className="info-header">
                 <div className="header-meta-row">
                   <span className="archival-overline text-accent">
-                    {item.category.toUpperCase()} // REGISTRY RECORD
+                    {isEditing
+                      ? `${editedCategory.toUpperCase()} // EDITING RECORD`
+                      : `${item.category.toUpperCase()} // REGISTRY RECORD`}
                   </span>
 
                   {/* Cloud / Local Storage Indicator Badge */}
@@ -152,46 +254,133 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
 
                 {isEditing ? (
                   <div className="edit-form-block">
-                    <input
-                      type="text"
-                      className="edit-input title-input"
-                      value={editedName}
-                      onChange={(e) => setEditedName(e.target.value)}
-                      placeholder="Item name"
-                    />
-                    <input
-                      type="text"
-                      className="edit-input"
-                      value={editedDesigner}
-                      onChange={(e) => setEditedDesigner(e.target.value)}
-                      placeholder="Designer / Label"
-                    />
-                    <input
-                      type="text"
-                      className="edit-input"
-                      value={editedFabric}
-                      onChange={(e) => setEditedFabric(e.target.value)}
-                      placeholder="Fabric composition"
-                    />
-                    <textarea
-                      className="edit-textarea"
-                      value={editedNotes}
-                      onChange={(e) => setEditedNotes(e.target.value)}
-                      placeholder="Curatorial notes..."
-                      rows={3}
-                    />
+                    {/* 1. Garment Name */}
+                    <div className="edit-form-group">
+                      <label className="edit-label font-mono">GARMENT NAME *</label>
+                      <input
+                        type="text"
+                        className="edit-input title-input"
+                        value={editedName}
+                        onChange={(e) => setEditedName(e.target.value)}
+                        placeholder="Garment name"
+                        required
+                      />
+                    </div>
+
+                    {/* 2. Category & Subcategory */}
+                    <div className="edit-form-row-dual">
+                      <div className="edit-form-group">
+                        <label className="edit-label font-mono">CATEGORY *</label>
+                        <select
+                          className="edit-select font-mono"
+                          value={editedCategory}
+                          onChange={(e) => setEditedCategory(e.target.value as ClothingCategory)}
+                        >
+                          {CATEGORIES.map((c) => (
+                            <option key={c.value} value={c.value}>
+                              {c.label.toUpperCase()}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="edit-form-group">
+                        <label className="edit-label font-mono">SUBCATEGORY</label>
+                        <input
+                          type="text"
+                          className="edit-input font-mono"
+                          value={editedSubcategory}
+                          onChange={(e) => setEditedSubcategory(e.target.value)}
+                          placeholder="e.g. Knitwear, Loafer"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 3. Colorway & Designer */}
+                    <div className="edit-form-row-dual">
+                      <div className="edit-form-group">
+                        <label className="edit-label font-mono">COLORWAY *</label>
+                        <input
+                          type="text"
+                          className="edit-input"
+                          value={editedColor}
+                          onChange={(e) => setEditedColor(e.target.value)}
+                          placeholder="e.g. Charcoal, Chalk White"
+                          required
+                        />
+                      </div>
+
+                      <div className="edit-form-group">
+                        <label className="edit-label font-mono">DESIGNER / LABEL</label>
+                        <input
+                          type="text"
+                          className="edit-input"
+                          value={editedDesigner}
+                          onChange={(e) => setEditedDesigner(e.target.value)}
+                          placeholder="e.g. Margaret Howell, Lemaire"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 4. Fabric Composition */}
+                    <div className="edit-form-group">
+                      <label className="edit-label font-mono">FABRIC COMPOSITION</label>
+                      <input
+                        type="text"
+                        className="edit-input"
+                        value={editedFabric}
+                        onChange={(e) => setEditedFabric(e.target.value)}
+                        placeholder="e.g. 100% Cashmere, Bonded Cotton"
+                      />
+                    </div>
+
+                    {/* 5. Seasons */}
+                    <div className="edit-form-group">
+                      <label className="edit-label font-mono">SEASONS</label>
+                      <div className="edit-seasons-row">
+                        {SEASONS.map((s) => {
+                          const isSelected = editedSeasons.includes(s);
+                          return (
+                            <button
+                              key={s}
+                              type="button"
+                              className={`season-toggle-chip font-mono ${isSelected ? 'active' : ''}`}
+                              onClick={() => toggleSeason(s)}
+                            >
+                              {s.toUpperCase()}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 6. Curatorial Notes */}
+                    <div className="edit-form-group">
+                      <label className="edit-label font-mono">CURATOR’S NOTES</label>
+                      <textarea
+                        className="edit-textarea"
+                        value={editedNotes}
+                        onChange={(e) => setEditedNotes(e.target.value)}
+                        placeholder="Curatorial notes, provenance, fit details..."
+                        rows={3}
+                      />
+                    </div>
+
+                    {/* 7. Save / Cancel Actions */}
                     <div className="edit-actions">
                       <button
                         type="button"
                         className="archival-btn-primary"
                         onClick={handleSaveEdit}
+                        disabled={isSaving}
                       >
-                        <Check size={12} /> SAVE CHANGES
+                        <Check size={12} /> {isSaving ? 'SAVING CHANGES...' : 'SAVE CHANGES'}
                       </button>
                       <button
                         type="button"
                         className="archival-btn-secondary"
                         onClick={() => setIsEditing(false)}
+                        disabled={isSaving}
                       >
                         CANCEL
                       </button>
@@ -213,6 +402,14 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                 <>
                   <div className="specimen-specs-grid font-mono">
                     <div className="spec-item">
+                      <span className="spec-label">CATEGORY</span>
+                      <span className="spec-value">
+                        {item.category.toUpperCase()}
+                        {item.subcategory ? ` // ${item.subcategory}` : ''}
+                      </span>
+                    </div>
+
+                    <div className="spec-item">
                       <span className="spec-label">COLORWAY</span>
                       <span className="spec-value">{item.color}</span>
                     </div>
@@ -227,7 +424,9 @@ export const ItemDetailModal: React.FC<ItemDetailModalProps> = ({
                     <div className="spec-item">
                       <span className="spec-label">SEASONS</span>
                       <span className="spec-value">
-                        {item.seasons.join(' · ')}
+                        {item.seasons && item.seasons.length > 0
+                          ? item.seasons.join(' · ')
+                          : 'All Seasons'}
                       </span>
                     </div>
 
