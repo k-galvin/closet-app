@@ -1,7 +1,14 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { ClothingItem, Collection, Outfit } from '../types';
 import { INITIAL_ITEMS, INITIAL_COLLECTIONS, INITIAL_OUTFITS } from './seedData';
-import { syncClothingItemToSupabase, deleteClothingItemFromSupabase, fetchSupabaseItems } from './supabase';
+import {
+  syncClothingItemToSupabase,
+  deleteClothingItemFromSupabase,
+  fetchSupabaseItems,
+  syncOutfitToSupabase,
+  deleteOutfitFromSupabase,
+  fetchSupabaseOutfits,
+} from './supabase';
 
 interface ClosetDB extends DBSchema {
   items: {
@@ -237,20 +244,22 @@ export const deleteItem = async (id: string): Promise<void> => {
   // Remove from outfits if assigned
   const outfits = await tx.objectStore('outfits').getAll();
   for (const outfit of outfits) {
+    if (!outfit.slots) continue;
     let changed = false;
     const slots = { ...outfit.slots };
-    (Object.keys(slots) as (keyof typeof slots)[]).forEach((slotKey) => {
+    (['outerwearId', 'topId', 'bottomId', 'dressId', 'shoesId', 'accessoryId'] as const).forEach((slotKey) => {
       if (slots[slotKey] === id) {
-        delete slots[slotKey];
+        slots[slotKey] = undefined;
         changed = true;
       }
     });
-    if (outfit.slots.itemIds?.includes(id)) {
-      outfit.slots.itemIds = outfit.slots.itemIds.filter((itemId) => itemId !== id);
+    if (slots.itemIds && slots.itemIds.includes(id)) {
+      slots.itemIds = slots.itemIds.filter((itemId) => itemId !== id);
       changed = true;
     }
     if (changed) {
       outfit.slots = slots;
+      outfit.updatedAt = Date.now();
       await tx.objectStore('outfits').put(outfit);
     }
   }
@@ -299,22 +308,105 @@ export const toggleItemInCollection = async (collectionId: string, itemId: strin
   return !exists;
 };
 
-// Outfit Operations
+const OUTFITS_BACKUP_KEY = 'archival_outfits_mirror_v1';
+
+// Outfit Operations (Multi-Tier: IndexedDB + localStorage mirror + Supabase Cloud Sync)
 export const getAllOutfits = async (): Promise<Outfit[]> => {
   await initDB();
   const db = await getDB();
-  const outfits = await db.getAll('outfits');
-  return outfits.sort((a, b) => b.createdAt - a.createdAt);
+  let localOutfits = await db.getAll('outfits');
+
+  // If local IndexedDB is empty, check localStorage backup
+  if (localOutfits.length === 0) {
+    try {
+      const raw = localStorage.getItem(OUTFITS_BACKUP_KEY);
+      if (raw) {
+        const mirrored: Outfit[] = JSON.parse(raw);
+        if (mirrored.length > 0) {
+          const tx = db.transaction('outfits', 'readwrite');
+          for (const o of mirrored) {
+            await tx.objectStore('outfits').put(o);
+          }
+          await tx.done;
+          localOutfits = mirrored;
+        }
+      }
+    } catch {}
+  }
+
+  // Automatic 2-way sync with Supabase cloud table (enables iPhone <-> Mac sync)
+  try {
+    const cloudOutfits = await fetchSupabaseOutfits();
+    const cloudIds = new Set(cloudOutfits.map((c) => c.id));
+
+    // 1. Push any local outfits that aren't yet in Supabase table
+    for (const localOutfit of localOutfits) {
+      if (!cloudIds.has(localOutfit.id)) {
+        await syncOutfitToSupabase(localOutfit);
+      }
+    }
+
+    // 2. Pull down any cloud outfits saved from other devices
+    if (cloudOutfits.length > 0) {
+      const tx = db.transaction('outfits', 'readwrite');
+      for (const o of cloudOutfits) {
+        await tx.objectStore('outfits').put(o);
+      }
+      await tx.done;
+
+      localOutfits = await db.getAll('outfits');
+    }
+  } catch {
+    // Offline mode: proceed with local outfits
+  }
+
+  // Always keep localStorage mirror updated
+  try {
+    localStorage.setItem(OUTFITS_BACKUP_KEY, JSON.stringify(localOutfits));
+  } catch {}
+
+  return localOutfits.sort((a, b) => b.createdAt - a.createdAt);
 };
 
 export const saveOutfit = async (outfit: Outfit): Promise<void> => {
+  // 1. Save to local IndexedDB
   const db = await getDB();
   await db.put('outfits', outfit);
+
+  // 2. Save to localStorage mirror immediately
+  try {
+    const raw = localStorage.getItem(OUTFITS_BACKUP_KEY);
+    const list: Outfit[] = raw ? JSON.parse(raw) : [];
+    const filtered = list.filter((o) => o.id !== outfit.id);
+    filtered.unshift(outfit);
+    localStorage.setItem(OUTFITS_BACKUP_KEY, JSON.stringify(filtered));
+  } catch {}
+
+  // 3. Sync to Supabase cloud if configured
+  try {
+    await syncOutfitToSupabase(outfit);
+  } catch {}
 };
 
 export const deleteOutfit = async (id: string): Promise<void> => {
+  // 1. Delete from local IndexedDB
   const db = await getDB();
   await db.delete('outfits', id);
+
+  // 2. Delete from localStorage mirror
+  try {
+    const raw = localStorage.getItem(OUTFITS_BACKUP_KEY);
+    if (raw) {
+      const list: Outfit[] = JSON.parse(raw);
+      const filtered = list.filter((o) => o.id !== id);
+      localStorage.setItem(OUTFITS_BACKUP_KEY, JSON.stringify(filtered));
+    }
+  } catch {}
+
+  // 3. Delete from Supabase cloud
+  try {
+    await deleteOutfitFromSupabase(id);
+  } catch {}
 };
 
 // Reset to sample catalog

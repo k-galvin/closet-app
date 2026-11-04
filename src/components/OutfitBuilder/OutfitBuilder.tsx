@@ -357,6 +357,7 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
     setShowSaveModal(false);
     setOutfitTitle('');
     setOutfitNotes('');
+    setActiveSubView('lookbook');
 
     try {
       confetti({
@@ -371,22 +372,24 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
   };
 
   const loadOutfitToBuilder = (outfit: Outfit) => {
-    if (outfit.slots.itemIds && outfit.slots.itemIds.length > 0) {
+    if (outfit?.slots?.itemIds && outfit.slots.itemIds.length > 0) {
       setSelectedItemIds(outfit.slots.itemIds);
     } else {
       const fallbackIds = [
-        outfit.slots.outerwearId,
-        outfit.slots.topId,
-        outfit.slots.bottomId,
-        outfit.slots.dressId,
-        outfit.slots.shoesId,
-        outfit.slots.accessoryId,
+        outfit?.slots?.outerwearId,
+        outfit?.slots?.topId,
+        outfit?.slots?.bottomId,
+        outfit?.slots?.dressId,
+        outfit?.slots?.shoesId,
+        outfit?.slots?.accessoryId,
       ].filter(Boolean) as string[];
       setSelectedItemIds(fallbackIds);
     }
 
-    if (outfit.slots.canvasPositions) {
+    if (outfit?.slots?.canvasPositions) {
       setCanvasPositions(outfit.slots.canvasPositions);
+    } else {
+      setCanvasPositions({});
     }
     setActiveSubView('builder');
   };
@@ -669,18 +672,18 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
           {outfits.length > 0 ? (
             <div className="lookbook-grid">
               {outfits.map((outfit) => {
-                // Support both multi-select itemIds and legacy single slots
-                const outfitItems: ClothingItem[] = outfit.slots.itemIds
+                // Support both multi-select itemIds and legacy single slots with safe null handling
+                const outfitItems: ClothingItem[] = outfit?.slots?.itemIds
                   ? (outfit.slots.itemIds
                       .map((id) => items.find((i) => i.id === id))
                       .filter(Boolean) as ClothingItem[])
                   : ([
-                      items.find((i) => i.id === outfit.slots.outerwearId),
-                      items.find((i) => i.id === outfit.slots.topId),
-                      items.find((i) => i.id === outfit.slots.bottomId),
-                      items.find((i) => i.id === outfit.slots.dressId),
-                      items.find((i) => i.id === outfit.slots.shoesId),
-                      items.find((i) => i.id === outfit.slots.accessoryId),
+                      items.find((i) => i.id === outfit?.slots?.outerwearId),
+                      items.find((i) => i.id === outfit?.slots?.topId),
+                      items.find((i) => i.id === outfit?.slots?.bottomId),
+                      items.find((i) => i.id === outfit?.slots?.dressId),
+                      items.find((i) => i.id === outfit?.slots?.shoesId),
+                      items.find((i) => i.id === outfit?.slots?.accessoryId),
                     ].filter(Boolean) as ClothingItem[]);
 
                 return (
@@ -704,12 +707,18 @@ export const OutfitBuilder: React.FC<OutfitBuilderProps> = ({
 
                     {/* Miniature Horizontal Strip of Garment Cutouts */}
                     <div className="look-garments-strip">
-                      {outfitItems.map((item) => (
-                        <div key={item.id} className="look-mini-thumb" title={item.name}>
-                          <img src={item.imageUrl} alt={item.name} />
-                          <span className="mini-cat-tag font-mono">{item.category[0].toUpperCase()}</span>
+                      {outfitItems.length > 0 ? (
+                        outfitItems.map((item) => (
+                          <div key={item.id} className="look-mini-thumb" title={item.name}>
+                            <img src={item.imageUrl} alt={item.name} />
+                            <span className="mini-cat-tag font-mono">{item.category[0].toUpperCase()}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="look-empty-thumb font-mono">
+                          <span>PIECES ARCHIVED</span>
                         </div>
-                      ))}
+                      )}
                     </div>
 
                     {outfit.notes && <p className="look-notes">{outfit.notes}</p>}

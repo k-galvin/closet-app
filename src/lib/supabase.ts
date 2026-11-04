@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { ClothingItem } from '../types';
+import { ClothingItem, Outfit } from '../types';
 
 const DEFAULT_URL = 'https://oaqzbymmhusbhvscfcrp.supabase.co';
 const DEFAULT_KEY = 'sb_publishable_Y8hY9if-e5PdwcmCKALzsQ_bzUpYVHp';
@@ -58,7 +58,7 @@ on storage.objects for all
 using (bucket_id = 'closet-images')
 with check (bucket_id = 'closet-images');`;
 
-export const SQL_TABLE_SETUP = `-- Optional: Closet Items table in Supabase
+export const SQL_TABLE_SETUP = `-- 1. Closet Items table in Supabase
 create table if not exists public.closet_items (
   id text primary key,
   catalog_number text,
@@ -79,6 +79,24 @@ alter table public.closet_items enable row level security;
 drop policy if exists "Allow public access to closet_items" on public.closet_items;
 create policy "Allow public access to closet_items"
 on public.closet_items for all
+using (true)
+with check (true);
+
+-- 2. Closet Outfits table in Supabase (enables outfit sync across iPhone & Mac)
+create table if not exists public.closet_outfits (
+  id text primary key,
+  title text not null,
+  occasion text,
+  notes text,
+  slots jsonb not null default '{}'::jsonb,
+  created_at bigint not null,
+  updated_at bigint not null
+);
+
+alter table public.closet_outfits enable row level security;
+drop policy if exists "Allow public access to closet_outfits" on public.closet_outfits;
+create policy "Allow public access to closet_outfits"
+on public.closet_outfits for all
 using (true)
 with check (true);`;
 
@@ -335,6 +353,65 @@ export const fetchSupabaseItems = async (): Promise<ClothingItem[]> => {
       seasons: row.seasons || [],
       notes: row.notes || undefined,
       imageUrl: row.image_url,
+      createdAt: Number(row.created_at) || Date.now(),
+      updatedAt: Number(row.updated_at) || Date.now(),
+    }));
+  } catch {
+    return [];
+  }
+};
+
+// Sync outfit metadata to Supabase closet_outfits table
+export const syncOutfitToSupabase = async (outfit: Outfit): Promise<boolean> => {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const row = {
+      id: outfit.id,
+      title: outfit.title,
+      occasion: outfit.occasion || null,
+      notes: outfit.notes || null,
+      slots: outfit.slots || {},
+      created_at: outfit.createdAt,
+      updated_at: outfit.updatedAt,
+    };
+
+    const { error } = await client.from('closet_outfits').upsert(row, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+};
+
+// Delete outfit from Supabase closet_outfits table
+export const deleteOutfitFromSupabase = async (id: string): Promise<boolean> => {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('closet_outfits').delete().eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+};
+
+// Fetch all outfits from Supabase closet_outfits table
+export const fetchSupabaseOutfits = async (): Promise<Outfit[]> => {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  try {
+    const { data, error } = await client.from('closet_outfits').select('*');
+    if (error || !data) return [];
+
+    return data.map((row) => ({
+      id: row.id,
+      title: row.title,
+      occasion: row.occasion || undefined,
+      notes: row.notes || undefined,
+      slots: row.slots || {},
       createdAt: Number(row.created_at) || Date.now(),
       updatedAt: Number(row.updated_at) || Date.now(),
     }));
