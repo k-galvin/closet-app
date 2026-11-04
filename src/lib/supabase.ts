@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { ClothingItem, Outfit } from '../types';
+import { ClothingItem, Outfit, Collection } from '../types';
 
 const DEFAULT_URL = 'https://oaqzbymmhusbhvscfcrp.supabase.co';
 const DEFAULT_KEY = 'sb_publishable_Y8hY9if-e5PdwcmCKALzsQ_bzUpYVHp';
@@ -97,6 +97,24 @@ alter table public.closet_outfits enable row level security;
 drop policy if exists "Allow public access to closet_outfits" on public.closet_outfits;
 create policy "Allow public access to closet_outfits"
 on public.closet_outfits for all
+using (true)
+with check (true);
+
+-- 3. Closet Collections / Packs table in Supabase (enables packs sync across iPhone & Mac)
+create table if not exists public.closet_collections (
+  id text primary key,
+  title text not null,
+  subtitle text,
+  description text,
+  item_ids text[] not null default '{}',
+  created_at bigint not null,
+  updated_at bigint not null
+);
+
+alter table public.closet_collections enable row level security;
+drop policy if exists "Allow public access to closet_collections" on public.closet_collections;
+create policy "Allow public access to closet_collections"
+on public.closet_collections for all
 using (true)
 with check (true);`;
 
@@ -412,6 +430,65 @@ export const fetchSupabaseOutfits = async (): Promise<Outfit[]> => {
       occasion: row.occasion || undefined,
       notes: row.notes || undefined,
       slots: row.slots || {},
+      createdAt: Number(row.created_at) || Date.now(),
+      updatedAt: Number(row.updated_at) || Date.now(),
+    }));
+  } catch {
+    return [];
+  }
+};
+
+// Sync collection / pack metadata to Supabase closet_collections table
+export const syncCollectionToSupabase = async (collection: Collection): Promise<boolean> => {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const row = {
+      id: collection.id,
+      title: collection.title,
+      subtitle: collection.subtitle || null,
+      description: collection.description || null,
+      item_ids: collection.itemIds || [],
+      created_at: collection.createdAt,
+      updated_at: collection.updatedAt,
+    };
+
+    const { error } = await client.from('closet_collections').upsert(row, { onConflict: 'id' });
+    return !error;
+  } catch {
+    return false;
+  }
+};
+
+// Delete collection / pack from Supabase closet_collections table
+export const deleteCollectionFromSupabase = async (id: string): Promise<boolean> => {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  try {
+    const { error } = await client.from('closet_collections').delete().eq('id', id);
+    return !error;
+  } catch {
+    return false;
+  }
+};
+
+// Fetch all collections / packs from Supabase closet_collections table
+export const fetchSupabaseCollections = async (): Promise<Collection[]> => {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  try {
+    const { data, error } = await client.from('closet_collections').select('*');
+    if (error || !data) return [];
+
+    return data.map((row) => ({
+      id: row.id,
+      title: row.title,
+      subtitle: row.subtitle || undefined,
+      description: row.description || undefined,
+      itemIds: row.item_ids || [],
       createdAt: Number(row.created_at) || Date.now(),
       updatedAt: Number(row.updated_at) || Date.now(),
     }));

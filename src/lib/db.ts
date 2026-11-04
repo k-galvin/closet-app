@@ -8,6 +8,9 @@ import {
   syncOutfitToSupabase,
   deleteOutfitFromSupabase,
   fetchSupabaseOutfits,
+  syncCollectionToSupabase,
+  deleteCollectionFromSupabase,
+  fetchSupabaseCollections,
 } from './supabase';
 
 interface ClosetDB extends DBSchema {
@@ -274,22 +277,105 @@ export const deleteItem = async (id: string): Promise<void> => {
   }
 };
 
-// Collection Operations
+const COLLECTIONS_BACKUP_KEY = 'archival_collections_mirror_v1';
+
+// Collection / Pack Operations (Multi-Tier: IndexedDB + localStorage mirror + Supabase Cloud Sync)
 export const getAllCollections = async (): Promise<Collection[]> => {
   await initDB();
   const db = await getDB();
-  const collections = await db.getAll('collections');
-  return collections.sort((a, b) => b.createdAt - a.createdAt);
+  let localCollections = await db.getAll('collections');
+
+  // If local IndexedDB is empty, check localStorage backup
+  if (localCollections.length === 0) {
+    try {
+      const raw = localStorage.getItem(COLLECTIONS_BACKUP_KEY);
+      if (raw) {
+        const mirrored: Collection[] = JSON.parse(raw);
+        if (mirrored.length > 0) {
+          const tx = db.transaction('collections', 'readwrite');
+          for (const c of mirrored) {
+            await tx.objectStore('collections').put(c);
+          }
+          await tx.done;
+          localCollections = mirrored;
+        }
+      }
+    } catch {}
+  }
+
+  // Automatic 2-way sync with Supabase cloud table (enables iPhone <-> Mac sync)
+  try {
+    const cloudCollections = await fetchSupabaseCollections();
+    const cloudIds = new Set(cloudCollections.map((c) => c.id));
+
+    // 1. Push any local collections that aren't yet in Supabase table
+    for (const localCol of localCollections) {
+      if (!cloudIds.has(localCol.id)) {
+        await syncCollectionToSupabase(localCol);
+      }
+    }
+
+    // 2. Pull down any cloud collections saved from other devices
+    if (cloudCollections.length > 0) {
+      const tx = db.transaction('collections', 'readwrite');
+      for (const c of cloudCollections) {
+        await tx.objectStore('collections').put(c);
+      }
+      await tx.done;
+
+      localCollections = await db.getAll('collections');
+    }
+  } catch {
+    // Offline mode: proceed with local collections
+  }
+
+  // Always keep localStorage mirror updated
+  try {
+    localStorage.setItem(COLLECTIONS_BACKUP_KEY, JSON.stringify(localCollections));
+  } catch {}
+
+  return localCollections.sort((a, b) => b.createdAt - a.createdAt);
 };
 
 export const saveCollection = async (collection: Collection): Promise<void> => {
+  // 1. Save to local IndexedDB
   const db = await getDB();
   await db.put('collections', collection);
+
+  // 2. Save to localStorage mirror immediately
+  try {
+    const raw = localStorage.getItem(COLLECTIONS_BACKUP_KEY);
+    const list: Collection[] = raw ? JSON.parse(raw) : [];
+    const filtered = list.filter((c) => c.id !== collection.id);
+    filtered.unshift(collection);
+    localStorage.setItem(COLLECTIONS_BACKUP_KEY, JSON.stringify(filtered));
+  } catch {}
+
+  // 3. Sync to Supabase cloud if configured
+  try {
+    await syncCollectionToSupabase(collection);
+  } catch {}
 };
 
 export const deleteCollection = async (id: string): Promise<void> => {
+  // 1. Delete from local IndexedDB
   const db = await getDB();
   await db.delete('collections', id);
+
+  // 2. Delete from localStorage mirror
+  try {
+    const raw = localStorage.getItem(COLLECTIONS_BACKUP_KEY);
+    if (raw) {
+      const list: Collection[] = JSON.parse(raw);
+      const filtered = list.filter((c) => c.id !== id);
+      localStorage.setItem(COLLECTIONS_BACKUP_KEY, JSON.stringify(filtered));
+    }
+  } catch {}
+
+  // 3. Delete from Supabase cloud
+  try {
+    await deleteCollectionFromSupabase(id);
+  } catch {}
 };
 
 export const toggleItemInCollection = async (collectionId: string, itemId: string): Promise<boolean> => {
@@ -304,7 +390,7 @@ export const toggleItemInCollection = async (collectionId: string, itemId: strin
     col.itemIds.push(itemId);
   }
   col.updatedAt = Date.now();
-  await db.put('collections', col);
+  await saveCollection(col);
   return !exists;
 };
 
